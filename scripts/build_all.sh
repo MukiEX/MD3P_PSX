@@ -5,12 +5,12 @@
 #   scripts/build_all.sh path/to/original.bin
 #
 # Needs: python3 (numpy), armips, xdelta3. Set ARMIPS / XDELTA3 if they are not
-# on PATH. Output: build/ (work files and patched BINs), dist/ (release files).
+# on PATH. Output: build/ (work files and patched BINs), releases/ (release files).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$(realpath "${1:?usage: build_all.sh original.bin}")"
 ARMIPS="${ARMIPS:-armips}"; XDELTA3="${XDELTA3:-xdelta3}"; export ARMIPS
-B="$ROOT/build"; D="$ROOT/dist"
+B="$ROOT/build"; D="$ROOT/releases"
 cd "$ROOT"
 
 crc() { python3 -c "import zlib,sys
@@ -58,4 +58,4 @@ echo "== browser patcher"
 python3 web/build_html.py "$B/patchdata" "$D/MD3 Paddle Edition Patcher.html"
 cp docs/CHANGES.txt "$D/patches/MD3_PS1_Paddle_Edition_changes.txt"
 (cd "$D/patches" && rm -f ../"Magical Drop III Paddle Edition patches.zip" && zip -q -X ../"Magical Drop III Paddle Edition patches.zip" ./*)
-echo "done: dist/"
+echo "done: releases/"
