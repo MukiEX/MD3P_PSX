@@ -38,7 +38,7 @@ Outputs land in `build/` (patched BINs) and `releases/` (patches, patcher, zip).
 | `tools/` | EXE extraction, signature search and chunk packer (`build.py`), disc patcher, PPF writer, hazard checker |
 | `web/` | Browser patcher: CHD v5 reader/writer, patch core, template, builder, Node/Playwright tests |
 | `test/` | libretro harness for PCSX-ReARMed (`retro.py`) and scripted tests; set `PCSX_CORE` to the core `.so` |
-| `docs/` | Change list and technical breakdown |
+| `docs/` | Change list and technical breakdown (the patcher also has a plain-language "How it works" tab) |
 | `releases/` | Release patches and patcher |
 
 No game data is included; everything is applied to your own disc image.

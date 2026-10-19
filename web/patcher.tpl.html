@@ -95,6 +95,29 @@ th { font: 700 .74rem/1.2 var(--f-body); letter-spacing: .1em; text-transform: u
 tr:last-child td { border-bottom: 0 }
 ul.feat { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; max-width: 64ch }
 footer { color: var(--muted); font-size: .85rem; display: grid; gap: 4px }
+/* tabs */
+.tabs { display: flex; gap: 6px; border-bottom: 1.5px solid var(--line); margin-bottom: -14px; overflow-x: auto }
+.tabs button { background: transparent; color: var(--muted); border-radius: 10px 10px 0 0; padding: 12px 16px; border-bottom: 3px solid transparent; margin-bottom: -1.5px; white-space: nowrap }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent) }
+.tabs button:hover { color: var(--fg) }
+.panel { display: grid; gap: 28px }
+.panel[hidden] { display: none }
+
+/* how it works */
+.how { display: grid; gap: 26px }
+.how section { display: grid; gap: 10px }
+.how p, .how li { max-width: 64ch }
+.how ul, .how ol { margin: 0; padding-left: 1.2em; display: grid; gap: 6px }
+.how .kick { font: 700 .74rem/1.2 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--accent) }
+.flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px }
+.flow .col { display: grid; gap: 6px }
+.flow .box { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: .88rem; line-height: 1.3; background: var(--bg) }
+.flow .box b { display: block; font-size: .92rem }
+.flow .box.hub { border-color: var(--accent); background: var(--accent-soft) }
+.flow .arr { color: var(--muted); font: 700 1.2rem/1 var(--f-body); text-align: center }
+.flow figcaption { grid-column: 1 / -1; color: var(--muted); font-size: .88rem; margin-top: 4px }
+@media (max-width: 600px) { .flow { grid-template-columns: 1fr } .flow .arr { transform: rotate(90deg) } }
+.callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: .95rem; max-width: 64ch }
 @media (prefers-reduced-motion: reduce) { .field i.t { animation: none; filter: brightness(1.2) } .bar > div { transition: none } }
 </style>
 
@@ -107,6 +130,12 @@ footer { color: var(--muted); font-size: .85rem; display: grid; gap: 4px }
   </header>
   <p class="lede">Patches your Magical Drop III (Europe) disc image for the PlayStation Mouse, the NeGcon, the Namco Volume paddle and a JP3-style spinner on the d-pad: an analog paddle for the clown, gliding movement, a pulsing target column, and all hidden characters unlocked. Everything runs in this page; your image never leaves your computer.</p>
 
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-patch" aria-controls="panel-patch" aria-selected="true">Patch</button>
+    <button role="tab" id="tab-how" aria-controls="panel-how" aria-selected="false" tabindex="-1">How it works</button>
+  </div>
+
+  <div class="panel" id="panel-patch" role="tabpanel" aria-labelledby="tab-patch">
   <section class="steps" aria-label="Patch steps">
     <div class="step">
       <h2 class="step-h">Choose your disc image</h2>
@@ -178,6 +207,99 @@ footer { color: var(--muted); font-size: .85rem; display: grid; gap: 4px }
       <li>All hidden characters are unlocked. All six languages are patched.</li>
     </ul>
   </section>
+  </div>
+
+  <div class="panel how" id="panel-how" role="tabpanel" aria-labelledby="tab-how" hidden>
+    <section>
+      <span class="kick">The idea</span>
+      <h2>A paddle for a game that never had one</h2>
+      <p>The Neo Geo Paddle Edition turns the clown in Magical Drop III into something you steer with a spinner, the way Taito's arcade puzzle games played. The PlayStation has no spinner, but it does have controllers that measure motion: the Mouse, the NeGcon's twist, and Namco's Volume knob. This patch teaches the European disc to read all three, plus a JP3-style spinner wired to a pad's d-pad, and to use any of them as a paddle.</p>
+      <p>The rule from the start was to change as little of the game as possible. The clown still moves through the game's own code, so every sound, animation and rule stays as it was. The patch only decides <i>when</i> the clown should step left or right, and draws it gliding between columns.</p>
+    </section>
+
+    <figure class="flow" aria-label="How input reaches the game">
+      <div class="col">
+        <div class="box"><b>PS Mouse</b>movement and two buttons</div>
+        <div class="box"><b>NeGcon</b>twist and analog buttons</div>
+        <div class="box"><b>Namco Volume</b>knob and A/B</div>
+        <div class="box"><b>JP3 spinner</b>on LEFT/RIGHT of a pad</div>
+      </div>
+      <div class="arr" aria-hidden="true">→</div>
+      <div class="col">
+        <div class="box hub"><b>New pad reader</b>raw controller data every frame; works out what's plugged into each port</div>
+      </div>
+      <div class="arr" aria-hidden="true">→</div>
+      <div class="col">
+        <div class="box"><b>In play</b>a virtual paddle position; the clown steps toward it one column per tick</div>
+        <div class="box"><b>In menus</b>single d-pad taps, so every screen reacts as if a pad was used</div>
+      </div>
+      <figcaption>Every controller goes through one reader. The game itself only ever sees ordinary button presses.</figcaption>
+    </figure>
+
+    <section>
+      <span class="kick">Step 1</span>
+      <h2>Reading the disc</h2>
+      <p>The disc has one data track. It boots a small language selector, which then loads one of six copies of the game: English, French, German, Spanish, Italian or Dutch. The six copies contain the same game code with addresses shifted by a few bytes, so the patch is written once, against the English copy. A build script finds each spot it needs in the other five by searching for the surrounding instructions with the shifting numbers masked out. Before writing, it checks the original instructions are exactly what it expects, so it can never patch the wrong place.</p>
+      <p>The patched files are written back over the originals, the same size and in the same place on the disc. Only the changed sectors get new error-correction data. That keeps the patches small and lets this page work on a CHD without rebuilding it.</p>
+    </section>
+
+    <section>
+      <span class="kick">Step 2</span>
+      <h2>Hearing the controllers</h2>
+      <p>The game read its pads through the BIOS, which only ever reports buttons. A mouse's movement or a NeGcon's twist never reached it. The first job was swapping that for the PlayStation's library pad driver, which hands back each controller's raw report every frame. A small reader then rebuilds the exact button word the game always used, so nothing else in the game had to change.</p>
+      <p>That reader is also where each port's controller is identified:</p>
+      <ul>
+        <li><b>Mouse</b> has its own ID.</li>
+        <li><b>NeGcon and Volume</b> send the same ID and the same report. A Volume physically can't press I, II, L, the d-pad or several other inputs, so a port is treated as a Volume until one of those shows up on several reads in a row. Then it's a NeGcon until it's unplugged.</li>
+        <li><b>JP3 spinner</b>: a spinner wired to LEFT and RIGHT will eventually report both at once, which a real d-pad can't do. The first time that happens, the port switches to spinner mode, the same rule the Neo Geo version uses.</li>
+        <li><b>Anything else</b> stays a normal pad, unchanged.</li>
+      </ul>
+      <p class="callout">Real hardware added one lesson. Controller reads sometimes fail or come back garbled, which made a Volume flicker between "NeGcon" and "Volume". Now a failed read repeats the last good one, garbage is ignored, and a port only counts as unplugged after 30 failed reads in a row.</p>
+    </section>
+
+    <section>
+      <span class="kick">Step 3</span>
+      <h2>Turning motion into a paddle</h2>
+      <p>During play the patch keeps a virtual paddle position, 128 units for each column. Mouse and spinner movement nudge it; the NeGcon twist and the Volume knob set it directly, wall to wall. When the position crosses into another column, the patch presses LEFT or RIGHT for the game for one tick, and the clown walks there normally.</p>
+      <ul>
+        <li><b>Hysteresis</b>: you have to go a little past a column's edge before it counts, so a shaky hand doesn't make the clown jitter.</li>
+        <li><b>Glide</b>: the clown and the aim line are drawn at the paddle position (never more than a column from the real one), so movement looks smooth instead of snapping.</li>
+        <li><b>Pulse</b>: the column you're aiming at gently pulses, using the brightness the game already uses for its fades.</li>
+        <li><b>Magnet</b>: over a column whose bottom balloon matches what you hold, the mouse slows down and the absolute controllers get stickier, so it's easier to stop where you mean to.</li>
+        <li><b>Volume buttons</b>: with only two buttons, A catches and B throws; holding A and pressing B pulls down a row; holding both for two seconds pauses.</li>
+      </ul>
+    </section>
+
+    <section>
+      <span class="kick">Step 4</span>
+      <h2>Menus without a d-pad</h2>
+      <p>Outside play, movement is counted up and turned into single d-pad taps written into the game's own "held" and "pressed" button words. Every menu, the name entry and the Options screen react just as they would to a pad. Character select gets special care: the mouse and NeGcon walk the cards in reading order, and the Volume knob becomes a dial where every card has its own slice of the turn. Options gains a MOUSE SPEED row drawn with the game's own text routine.</p>
+    </section>
+
+    <section>
+      <span class="kick">Step 5</span>
+      <h2>Finding room for about 6 KB of new code</h2>
+      <p>The game fills the PlayStation's memory, so there was no empty space to add code. The build script maps every function the game can possibly call, starting from the entry point and following every pointer. Library functions that nothing ever reaches are free to reuse. Recorded play sessions double-checked that none of them ever ran. The new code is split into 20 small pieces that a packer fits into those gaps automatically, so moving one piece never means rewriting addresses by hand.</p>
+    </section>
+
+    <section>
+      <span class="kick">Step 6</span>
+      <h2>60 Hz and English start</h2>
+      <p>The game's timers count frames, so on a 50 Hz PAL console it runs about 17% slower than its designers intended. The NTSC build switches the video mode and screen position to 60 Hz, which brings back full speed with no other changes. The English-start option replaces the call that shows the flag screen with "English", so the game loads straight in.</p>
+    </section>
+
+    <section>
+      <span class="kick">Step 7</span>
+      <h2>Testing</h2>
+      <p>Every feature was tested in a scripted emulator: the scripts drive a virtual mouse, NeGcon, Volume or spinner, and check the game's memory to confirm where the clown is, which card is picked or whether the game paused, instead of trusting screenshots. Every language and every build goes through it. A checker also scans the code for the PlayStation CPU's timing rules (a value loaded from memory isn't ready for the very next instruction). The emulator is forgiving about this, so two such bugs slipped through before the checker existed; it now runs on every build.</p>
+    </section>
+
+    <section>
+      <span class="kick">This page</span>
+      <h2>How the patcher works</h2>
+      <p>Everything happens in your browser, in a background worker. A CHD is decompressed hunk by hunk (LZMA, Deflate and FLAC, with the CD error correction regenerated) and its checksum compared with the Redump dump before anything is changed. For CHD output, untouched hunks are copied straight from your file, and only the handful that changed are rewritten, so a new 200 MB CHD comes out in under a minute. The result is wrapped in an uncompressed ZIP so a BIN and its CUE arrive together.</p>
+    </section>
+  </div>
 
   <footer>
     <span>Expected source: Magical Drop III (Europe) (En,Fr,De,Es,It,Nl), data CRC32 <span class="mono">FE561E70</span>.</span>
@@ -245,6 +367,19 @@ self.onmessage = (ev) => {
     field.appendChild(i);
   }
   const cl = document.createElement('span'); cl.className = 'clown'; field.appendChild(cl);
+
+  // tabs
+  const tabs = [...document.querySelectorAll('[role=tab]')];
+  const showTab = (t, focus) => {
+    tabs.forEach(b => { const on = b === t; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; $(b.getAttribute('aria-controls')).hidden = !on; });
+    if (focus) t.focus();
+    try { history.replaceState(null, '', t.id === 'tab-how' ? '#how' : location.pathname + location.search); } catch (e) {}
+  };
+  tabs.forEach((b, i) => {
+    b.addEventListener('click', () => showTab(b));
+    b.addEventListener('keydown', (e) => { const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (d) { e.preventDefault(); showTab(tabs[(i + d + tabs.length) % tabs.length], true); } });
+  });
+  if (location.hash === '#how') showTab($('tab-how'));
 
   let file = null, isChd = false, worker = null, result = null;
   const fmt = () => document.querySelector('input[name=fmt]:checked').value;
