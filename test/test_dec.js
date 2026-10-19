@@ -1,4 +1,4 @@
-const fs=require('fs');const C=require('./chd.js');
+const fs=require('fs');const C=require('../web/chd.js');
 const fn=process.argv[2];const fd=fs.openSync(fn,'r');const size=fs.fstatSync(fd).size;
 const read=(o,l)=>{const b=Buffer.alloc(l);fs.readSync(fd,b,0,l,o);return new Uint8Array(b.buffer,b.byteOffset,l);};
 const t0=Date.now();const chd=new C.CHD(read,size);

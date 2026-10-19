@@ -1,6 +1,6 @@
 const fs=require('fs');
 const strip=s=>s.replace(/^if \(typeof module.*$/m,'');
-const code=strip(fs.readFileSync(__dirname+'/chd.js','utf8'))+strip(fs.readFileSync(__dirname+'/core.js','utf8'))+';return {patchCHD,patchBIN,MD3,INF};';
+const code=strip(fs.readFileSync(__dirname+'/../web/chd.js','utf8'))+strip(fs.readFileSync(__dirname+'/../web/core.js','utf8'))+';return {patchCHD,patchBIN,MD3,INF};';
 const L=new Function(code)();
 const [,, inFile, variant, fmt, outFile]=process.argv;
 const fd=fs.openSync(inFile,'r');const size=fs.fstatSync(fd).size;

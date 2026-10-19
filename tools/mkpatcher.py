@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# build_html.py <patchdata dir> <out.html>
+# mkpatcher.py <patchdata dir> <out.html>
 # Inlines chd.js, core.js and the four patch blobs into the single-file patcher.
 import re, sys, os
-d = os.path.dirname(os.path.abspath(__file__)) + '/'
+d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'web') + '/'
 pd = sys.argv[1].rstrip('/') + '/'
 strip = lambda s: re.sub(r'^if \(typeof module.*$', '', s, flags=re.M)
 t = open(d + 'patcher.tpl.html').read()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# make_patchdata.py original.bin patched.bin out.b64
+# mkpatchdata.py original.bin patched.bin out.b64
 # Patch blob for the browser patcher: u32 count, then per record u32 offset,
 # u16 length, bytes (records never cross a 2352-byte sector); raw-deflated, base64.
 import sys, zlib, base64, struct

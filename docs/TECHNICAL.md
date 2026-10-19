@@ -127,7 +127,7 @@ Everything builds from source with Python 3 and armips, and a clean build reprod
 | `tools/make_ppf.py`, xdelta3 | PPF 3.0 and xdelta patches against the Redump BIN |
 | `tools/hazards.py` | Load-delay and MFLO hazard check over the asm sources |
 | `test/retro.py` | ctypes libretro frontend for PCSX-ReARMed: scripted pad / mouse / NeGcon input, savestates, RAM reads |
-| `pcsx_rearmed_debug_hooks.diff` | Breakpoint, watchpoint and coverage hooks in the interpreter (used for free-space proof and debugging) |
+| `third_party/pcsx_rearmed_debug_hooks.diff` | Breakpoint, watchpoint and coverage hooks in the interpreter (used for free-space proof and debugging) |
 | `test/*.py` | seq, mkstates, langtest (six languages), jp3test, voltest, volmenu, volchord, glitchtest (flaky link) |
 
 Testing habits that paid off: assert game state from RAM through the build's symbol file instead of trusting screenshots, rebuild savestates after every relocation (they contain the old code), and use watchpoints to find who writes a byte.

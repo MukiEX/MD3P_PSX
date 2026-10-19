@@ -2,7 +2,7 @@
 # Build all four Paddle Edition variants, their patches and the browser patcher
 # from the original Redump BIN.
 #
-#   scripts/build_all.sh path/to/original.bin
+#   tools/build_all.sh path/to/original.bin
 #
 # Needs: python3 (numpy), armips, xdelta3. Set ARMIPS / XDELTA3 if they are not
 # on PATH. Output: build/ (work files and patched BINs), releases/ (release files).
@@ -50,12 +50,12 @@ for v in p pe n ne; do
   out="$D/patches/Magical Drop III Paddle Edition (${NAME[$v]})"
   "$XDELTA3" -e -9 -f -s "$BIN" "$B/md3$v.bin" "$out.xdelta"
   python3 tools/make_ppf.py "$BIN" "$B/md3$v.bin" "$out.ppf" "Magical Drop III PS1 Paddle Edition ${NAME[$v]}" >/dev/null
-  python3 web/make_patchdata.py "$BIN" "$B/md3$v.bin" "$B/patchdata/patch_${KEY[$v]}.b64" >/dev/null
+  python3 tools/mkpatchdata.py "$BIN" "$B/md3$v.bin" "$B/patchdata/patch_${KEY[$v]}.b64" >/dev/null
   echo "  ${NAME[$v]}: CRC32 $(crc "$B/md3$v.bin")"
 done
 
 echo "== browser patcher"
-python3 web/build_html.py "$B/patchdata" "$D/MD3 Paddle Edition Patcher.html"
+python3 tools/mkpatcher.py "$B/patchdata" "$D/MD3_PSX_PADDLE.html"
 cp docs/CHANGES.txt "$D/patches/MD3_PS1_Paddle_Edition_changes.txt"
 (cd "$D/patches" && rm -f ../"Magical Drop III Paddle Edition patches.zip" && zip -q -X ../"Magical Drop III Paddle Edition patches.zip" ./*)
 echo "done: releases/"
