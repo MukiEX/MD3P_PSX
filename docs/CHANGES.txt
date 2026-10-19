@@ -1,0 +1,405 @@
+MAGICAL DROP III (PS1) PADDLE EDITION — WHAT WAS CHANGED
+========================================================
+Game:    Magical Drop III (Europe) (En,Fr,De,Es,It,Nl), SLES-02964
+         Boot: SLES_029.64 (language select), then MD3EN/FR/GE/IT/SP/NL.EXE
+Output:  Four builds, each as an xdelta and a PPF against the original BIN
+         (all in Magical Drop III Paddle Edition patches.zip):
+           Magical Drop III Paddle Edition (PAL)                 - 50 Hz, like the original
+           Magical Drop III Paddle Edition (PAL, English)        - same, no language screen
+           Magical Drop III Paddle Edition (NTSC 60Hz)           - 60 Hz, see section 8
+           Magical Drop III Paddle Edition (NTSC 60Hz, English)  - same, no language screen
+Source:  md3psx_paddle.asm (all six game EXEs) and sles_paddle.asm (language
+         select), armips; built by build.py.
+
+All six languages get the same patch. Addresses in this file are for
+MD3EN.EXE. The other EXEs have the same code shifted by a few bytes, and
+build.py finds every site in them by signature.
+
+This file lists only the final behaviour. Ideas that were tried and
+dropped are left out.
+
+
+1. THE CONTROLLERS: PLAYSTATION MOUSE, NEGCON, NAMCO VOLUME, JP3 SPINNER
+-----------------------------------------------------------------------
+- Ports: either port, in any mix. Each port's controller ID is read every
+  frame (mouse 0x12, NeGcon 0x23), so nothing has to be detected or
+  enabled. Digital pads, analog pads and DualShocks behave as before.
+- Driver: the game's PadInit used the old BIOS B(15h) driver. That driver
+  only returns a digital button word, and has no mouse support at all.
+  It now uses the library's InitPAD/StartPAD with two raw 0x22-byte
+  buffers. PadRead (0x8006CBAC) rebuilds the same button word from those
+  buffers, so every screen gets its input in the format it expects.
+- Mouse buttons:
+    In play:   left = catch, right = throw (whatever the player's
+               "Set operation" catch/throw buttons are).
+    Elsewhere: left = X, right = TRIANGLE.
+    Both buttons together = START (title screen, pause).
+- NeGcon buttons: A = CIRCLE, B = TRIANGLE, R = R1, START and the d-pad
+  work as wired. The analog I, II and L buttons count as X, SQUARE and L1
+  once pressed past 0x60.
+- Namco Volume Controller (SLPH-00015, the paddle knob): it reports the
+  same ID as the NeGcon (0x23), with the knob on the twist byte
+  (0x00-0xFF) and only two buttons, A on the NeGcon START bit and B on
+  the NeGcon A (CIRCLE) bit. The analog I, II and L bytes stay at 0.
+    - Detection: the two can't be told apart until a control is used,
+      and a Volume can never send anything a NeGcon doesn't have. So an
+      ID 0x23 controller is taken as a Volume, and switches to NeGcon the
+      first time it shows input only a NeGcon has: I, II or L past 0x60,
+      the d-pad, B, R or SELECT. The same input has to show on 3 reads
+      in a row (2 on the language screen, which reads every other
+      frame), so one garbled read can't switch it. The press itself
+      isn't lost: the game sees it from that read on. It then stays a
+      NeGcon until it's unplugged or swapped.
+    - Flaky links: a failed read (status byte not 0) repeats the port's
+      last button word and keeps everything known about the port; only
+      30 failed reads in a row count as unplugged. A read where I, II and
+      L are all 0xF0 or more counts as failed, not as a NeGcon. After
+      each read the raw buffer's ID byte is cleared; the driver writes
+      it with every transfer, so a buffer that wasn't refreshed is never
+      counted twice. Before this, a Volume on a link that dropped reads
+      could flip between the NeGcon and Volume handling. A NeGcon that hasn't used any of those yet
+      behaves as a Volume: START = X, A = TRIANGLE, the twist steps menus
+      like a mouse. Its first I press (usually confirming the language)
+      settles it.
+    - In play: A = catch, B = throw. With A held, B is the player's
+      "pull down" button (whatever "Set operation" maps to it; read
+      from the player's mapping at +0x35C). Both held for 2 seconds
+      (100 frames PAL, 120 NTSC) is START, which pauses.
+    - In menus: the knob alone steps UP/DOWN (mode select, difficulty,
+      Options rows, the pause menu). Hold B and turn to step LEFT/RIGHT
+      (Options values such as MOUSE SPEED). A = X. A tap of B on its
+      own is TRIANGLE (back), sent when B is let go without the knob
+      having turned. A+B together = START (title screen).
+    - In play the knob is absolute, like the NeGcon twist but over its
+      whole travel: tuning bytes vlo (0x00) and vhi (0xFF) are the knob
+      values at the left and right walls. The magnet makes a matching
+      column sticky, as on the NeGcon.
+    - Card select in 1P / 2P (the card grid): the knob is a dial over all
+      23 cards in reading order. Left end = first hidden card, right end
+      = last card of the lower row, about 11 knob steps per card. Nothing
+      moves when the screen opens; the cursor follows once the knob
+      enters another card's zone. Each zone edge has 2 knob steps of
+      hysteresis, so a knob resting on an edge doesn't flicker. In Solo
+      and Competition (single list) the knob steps like the mouse.
+    - Menu steps use the mouse's step size: 2 counts per knob step
+      (tuning byte vcnt), so 10 knob steps per menu step. In name entry
+      the knob picks letters, 4 knob steps per letter. Solo and
+      Competition walk their card list with the knob.
+- JP3 "sensor" spinner on a digital pad's d-pad, as in the Neo Geo
+  version: the spinner drives the pad's LEFT and RIGHT lines as a
+  quadrature encoder, the same as the Taito F3 JP3 input:
+      LEFT  = phase A
+      RIGHT = phase B
+      A leading B (00 -> 10 -> 11 -> 01) = +1 = clockwise = right
+    - Auto-detection: a port becomes a spinner the first time LEFT and
+      RIGHT read pressed together. A d-pad can't do that. Until then
+      nothing changes: pad play is identical to the original. The port
+      drops back to a normal pad when its controller is unplugged or
+      swapped for a mouse or NeGcon. P1 and P2 are detected and counted
+      separately. All the pad's other buttons work as normal.
+    - Once a port is a spinner, LEFT/RIGHT never reach the game as
+      buttons. Every edge counts as 8 mouse counts (tuning byte "jcnt"),
+      so the spinner drives the same paddle, menus, card select and name
+      entry as the mouse. At MOUSE SPEED x1 that is 32 units per edge,
+      4 edges (one full A/B cycle) per column.
+    - Sampling: unlike the Neo Geo, the PS1 pad is a serial device that
+      the library reads once per frame (50 or 60 Hz). Reading it faster
+      would mean driving the serial port from a timer interrupt alongside
+      the library's own driver and the memory card, which this patch
+      doesn't do. So turns faster than one edge per frame
+      skip states. A sample where both phases changed at once (two edges
+      in one frame) is counted as two edges in the last known direction,
+      rather than being ignored as on the Neo Geo. That keeps up to 2
+      edges per frame (100 / 120 per second). Anything faster can't be
+      decoded from frame-rate samples, so a spinner that turns faster
+      needs an adapter that paces its edges, or a lower count per turn.
+    - Code: the digital-pad path of PadRead (pad_one), state bytes +0x44
+      to +0x46 of each port's state block.
+
+
+2. IN-GAME: THE CLOWN IS DRIVEN BY A VIRTUAL PADDLE
+---------------------------------------------------
+Hook: 0x8003575C, the clown movement routine (s2 = this tick's buttons).
+
+- Position: a paddle position of 128 units per column, clamped at the
+  walls. Each tick, the clown walks one column towards the paddle's
+  column. It goes through the game's own left/right code, so the sounds,
+  animations and column limits all stay.
+- Mouse: X movement moves the paddle. MOUSE SPEED (section 5) sets the
+  units per count: x0.25 = 1, x0.5 = 2, x1 = 4, x2 = 8. At x1 that is
+  32 counts per column.
+    - Hysteresis: a column edge has to be passed by 8 units (2 counts at
+      x1) before it counts.
+    - Settle: after 8 idle ticks, the position re-centres in its column.
+    - Same-colour slowdown ("magnet"): over a column whose bottom balloon
+      matches the colour in the clown's hand, the mouse moves the paddle
+      at half speed.
+- NeGcon: the twist IS the paddle position. Centre = middle column, and
+  centre +-0x60 spans the field. The spring brings the clown back to the
+  middle when you let go. The "magnet" makes a matching column sticky
+  instead (4x hysteresis).
+- When a round starts, the paddle starts on the clown's column.
+- Players run by the computer are never touched. Tested in 1P and 2P
+  (either port), and in Solo, which has a wider field.
+
+
+3. IN-GAME VISUALS
+------------------
+- Smooth glide: the clown, and the aim line with it, are drawn where the
+  paddle is, gliding between columns. The drawn position always stays
+  within one column of the clown's real column.
+  Hooks: clown X at 0x80025130, aim line X at 0x80024D84.
+- Pulsing target column: the balloons in the column the paddle points at
+  pulse from 50% dark through normal to about 25% brighter. It's a
+  triangle wave in 12 steps of 4 frames: 0.96 s per cycle at 50 Hz,
+  0.8 s at 60 Hz.
+  How it works:
+    - The PS1 version draws balloons as textured sprites whose colour
+      comes from the game's fade brightness (0x800A918E).
+    - The balloon loop (hook at 0x80024564) sets that brightness per cell.
+      The targeted column gets the pulsed value.
+    - After the loop (hook at 0x80024990), the game's own value is put
+      back, so fades still work.
+
+
+4. MENUS
+--------
+- Mouse: the mouse is 2D, so in menus X steps LEFT/RIGHT and Y steps
+  UP/DOWN.
+    - 20 counts per step, at most one step per tick. The remainder
+      carries over.
+    - The game's menus only react to exactly one direction. So if both
+      axes reach a step in the same tick, the larger one wins and the
+      other waits for the next tick.
+    - The steps are written into the game's own held and press records
+      (0x800A911C / 0x800A9144), so every menu reacts as if the d-pad
+      was tapped.
+- NeGcon: twisting past the dead zone (0x18) gives one step straight
+  away. Holding the twist repeats, faster the further you twist. It steps
+  UP/DOWN by default (tuning byte "nmap"), and the d-pad still works.
+- In play the menu counters are cleared every tick, so a turn on one
+  screen never leaks into the next.
+- Card select (cursor routine 0x8005E5BC): mouse X and NeGcon twist walk
+  the cards in reading order and wrap around: hidden block, upper row,
+  then lower row. Mouse Y moves up/down using the game's own
+  neighbours. In Solo and Competition (single list), the steps become the
+  game's own LEFT/RIGHT. The new cursor goes through the game's own code,
+  so the sound and portrait update happen as normal.
+- Ranking name entry (hook at 0x8003BE74): 8 mouse counts per letter.
+  Letters wrap. A click enters the letter.
+
+
+5. NEW OPTION: MOUSE SPEED (OPTIONS SCREEN)
+-------------------------------------------
+- A new row with x0.25 / x0.5 / x1 / x2, under Sound. Score display moves
+  down one line to make room.
+- It scales the in-game mouse and JP3 spinner paddle only. Menus, card
+  select and name entry stay at their fixed rates.
+- It's drawn with the game's own text routine and arrows, and is
+  highlighted like the other rows. The cursor goes Sound -> Mouse speed
+  -> Score display.
+- The label is in each EXE's language:
+    Mouse speed / Vitesse souris / Maus-Tempo / Velocita mouse /
+    Vel. raton / Muissnelheid
+- It defaults to x1 at power-on. It isn't written to the memory card.
+- Hooks: 0x8005FE18 (item table -> a copy with 9 rows), 0x8005FE4C (row
+  count 8 -> 9), 0x8005D084 (cursor routine), 0x8005FF54 (draws the
+  value), 0x8009A79A (Score display y 0x90 -> 0xA0).
+
+
+6. HIDDEN CHARACTERS UNLOCKED
+-----------------------------
+- 0x8005E748, 0x8005E7C8, 0x8005E800: the card select's three reads of the
+  unlock flags (0x800D84EC) now read as "all set". The hidden cards are
+  always on the grid, in every mode that uses it.
+- Your save data is not changed. build.py --nounlock builds without this.
+
+
+7. LANGUAGE SELECT (SLES_029.64)
+--------------------------------
+- Mouse: move left/right to pick a flag, left button = X.
+- NeGcon: twist left/right steps once per twist (it re-arms near the
+  centre). I = X.
+- Namco Volume: 24 knob steps = one flag, A confirms. Detection is the
+  same as in the game (Volume until NeGcon-only input), and the game EXE
+  detects it again on its own.
+- JP3 spinner on the d-pad: turns on the same way (LEFT and RIGHT read
+  together). Then 4 edges = one flag, and X confirms as usual. The
+  selector and the game are separate EXEs, so the game detects the
+  spinner again the first time it turns.
+- The failed-read and garbled-read handling is the same as in the game.
+- Hook: 0x800136B4, the selector's pad read. The code lives in an
+  unreachable library function at 0x800122A4.
+- English builds: 0x80011660, the call that runs the language screen and
+  returns the chosen index, becomes "v0 = 0" (English). The selector then
+  loads MD3EN.EXE straight away, so the flags never show. The game EXEs
+  are the same in all builds. Built with armips -equ SKIPLANG 1.
+
+
+8. NTSC (60 HZ) BUILD
+---------------------
+- Why this is "speed-normalized": the game logic runs once per vblank,
+  and the in-game clocks divide frame counts by 60 (for example the time
+  shown on the Solo record screen). The PAL release is an unadjusted
+  50 Hz port of 60 Hz logic, so it runs at 5/6 speed with a slow clock.
+  At 60 Hz, the game, the clocks and the libsnd tick rate (which follows
+  the video mode) all run at the intended speed. So only the video
+  changes.
+- Game EXEs:
+    - SetVideoMode(NTSC) at 0x80013FA8.
+    - The PAL centring offsets screen.x/y = 5/26 become 0/0. In the main
+      display at 0x80014064 / 0x8001407C, and in the movie player at
+      0x8001BE4C / 0x8001BE54.
+    - The game draws 320x240, so the whole frame shows. The movies are
+      already centred in it (y 24, 192 lines).
+- Language select:
+    - SetVideoMode(NTSC).
+    - screen.y = 0 and screen.h = library default.
+    - Its 640x256 screen loses its bottom 16 lines, which are blank.
+- Everything else is the same as the PAL build.
+
+
+9. WHERE THE PATCH LIVES
+------------------------
+- There is no spare RAM in this game. The fixed buffers begin right
+  after the EXE, and the movie buffers and stack meet near the top of
+  RAM. So the code (about 6 KB) is placed inside the EXE itself, in
+  20 chunks. build.py packs them into the free runs (best fit, then a
+  search if that doesn't work out).
+- Most chunks go into library functions that nothing can ever call. This
+  was checked statically (reachability from the entry point and every
+  pointer in the image) and against recorded play, where none of that
+  code ever ran. The rest go into the tail of the EXE image after the
+  BSS (0x8010A8E0-0x8010B000).
+- The unused heap now starts at 0x8010B000 (0x80063684), so InitHeap
+  doesn't write its header over that tail. The game never allocates from
+  the heap.
+- RAM: 2 x 0x50 bytes of per-player state, two 0x24-byte raw pad buffers,
+  and a few words. All of it is inside the placed chunks.
+- No MULT/DIV follows an MFLO within two instructions (an R3000 hazard
+  that emulators don't model), and no instruction uses a register the
+  instruction just before it loaded (the load delay; tools/hazards.py
+  checks both sources). This fixed a stuck chord state in the Volume
+  code and the NeGcon twist on the language screen, which read the
+  value from before the load.
+- EXE sizes, file positions and the disc layout are unchanged. Only the
+  changed sectors were rewritten, with fresh EDC/ECC.
+- build.py checks the original instructions at every patch site before
+  writing, so a wrong EXE is refused.
+
+
+10. FULL LIST OF PATCH SITES (MD3EN.EXE)
+----------------------------------------
+  0x80063684   heap start (BSS end -> 0x8010B000)
+  0x8006CB80   PadInit tail -> InitPAD/StartPAD with raw buffers
+  0x8006CBAC   PadRead -> raw buffer decoder
+  0x8001447C   per-frame input update -> also runs the paddle tick
+  0x8003575C   in-game clown movement -> virtual paddle
+  0x80025130   clown X (glide)
+  0x80024D84   aim line X (glide)
+  0x80024564   balloon grid cell (pulse)
+  0x80024990   end of balloon grid (restore brightness)
+  0x8005E5BC   card select cursor routine
+  0x8005E748   unlock flags read 1
+  0x8005E7C8   unlock flags read 2
+  0x8005E800   unlock flags read 3
+  0x8005D084   options cursor routine call
+  0x8005FE18   options item table pointer
+  0x8005FE4C   options row count
+  0x8005FF54   options draw (MOUSE SPEED value)
+  0x8009A79A   options: Score display row y
+  0x8003BE74   ranking name entry input
+  NTSC only:  0x80013FA8, 0x80014064, 0x8001407C, 0x8001BE4C, 0x8001BE54
+  SLES_029.64: 0x800136B4 (pad read); NTSC: 0x80011474, 0x80011540,
+               0x8001155C, 0x8001156C, 0x80011574
+  The per-language addresses are in build_log.json in the source package.
+
+
+11. TUNING BLOCK (starts with "PDCF")
+-------------------------------------
+  +0   magic   "PDCF"
+  +4   kmenu     20   mouse counts per menu step
+  +6   kname      8   mouse counts per letter on name entry
+  +8   invert     0   1 = reverse mouse X / twist
+  +9   nmap       0   NeGcon twist in menus: 0 = up/down, 1 = left/right
+  +10  hyst       8   units past a column edge before it counts (128 = 1 col)
+  +12  settle     8   idle ticks before re-centring (0 = never)
+  +14  speed      2   MOUSE SPEED at power-on (0 x0.25, 1 x0.5, 2 x1, 3 x2)
+  +15  magnet     1   same-colour slowdown / stickiness (0 = off)
+  +16  dark       1   target column pulse (0 = off)
+  +17  glide      1   draw the clown where the paddle is (0 = off)
+  +18  ndead   0x18   NeGcon twist dead zone in menus
+  +19  nrange  0x60   NeGcon twist half-range across the field in play
+  +20  nrate  0x140   NeGcon menu repeat (deflection sum per step)
+  +22  nthr    0x60   NeGcon I / II / L threshold to count as pressed
+  +23  jcnt       8   JP3 spinner: mouse counts per quadrature edge
+  +24  speedtab 1,2,4,8         units per mouse count for each MOUSE SPEED
+  +28  pulsetab 64..160..80     12 brightness steps (128 = normal)
+  +40  vlo     0x00   Namco Volume knob value at the left wall
+  +41  vhi     0xFF   Namco Volume knob value at the right wall
+  +42  vcnt       2   Namco Volume: mouse counts per knob step in menus
+  +43  -          0   reserved
+
+  The block is in a different place in each EXE:
+           CPU address   in the EXE file   in the BIN (PAL and NTSC)
+    EN     0x8006C528    0x5CD28           0x08C700
+    FR     0x8010AFD0    0xFB7D0           0x263768
+    GE     0x8006C58C    0x5CD8C           0x2CE204
+    IT     0x8006C58C    0x5CD8C           0x3EEF54
+    SP     0x8006C5AC    0x5CDAC           0x50FCC4
+    NL     0x8006C578    0x5CD78           0x6309E0
+  If you edit the BIN directly, fix the sector's EDC/ECC afterwards (for
+  example with patchdisc.py), or rebuild from the source instead.
+
+
+12. APPLYING
+------------
+- Source image: the BIN made by
+      chdman extractcd -i "<your>.chd" -o md3.cue
+  The xdelta and PPF patches are against that BIN:
+      193750 sectors, 455,700,000 bytes
+      CRC32 FE561E70, SHA-1 d368fa5c7779a052d4856f192111b163784cb06e
+- Results:
+      PAL            CRC32 6A644BE1, SHA-1 56429ab51b40b45414de371a5f5f05c51f89b869
+      PAL, English   CRC32 804A7D47, SHA-1 58d51545fe66e561b021069b8f8b669b391ee333
+      NTSC           CRC32 4C9B268E, SHA-1 6689ba01f105d4e76a93fecd4fe4a9a0d42f3818
+      NTSC, English  CRC32 A6B51028, SHA-1 f408188b28107d9ac2f287903d2f50b79d22aaa9
+- Keep the same .cue (rename the FILE line to the new BIN). To get a CHD
+  back:
+      chdman createcd -i "Magical Drop III Paddle Edition (PAL).cue"
+                      -o "Magical Drop III Paddle Edition (PAL).chd"
+
+
+13. TESTED / NOT TESTED
+-----------------------
+- Tested in PCSX-ReARMed (libretro, HLE BIOS, interpreter) with a scripted
+  PS mouse and NeGcon in both ports. That covered:
+    - mouse-only boot through the language select, memory card screen
+      and title;
+    - menus, the options row, card select, 1P / 2P / Solo play and
+      Solo name entry;
+    - all six languages, in PAL and in NTSC;
+    - a scripted JP3 spinner on a digital pad in port 1: the language
+      select, card select walking, and in-game paddle movement both ways,
+      including frames where both phases changed at once;
+    - a scripted Namco Volume (as PCSX-ReARMed's NeGcon with START and
+      A): language select, boot with no setup press, the card select
+      dial over all 23 cards both ways, the knob across the whole field
+      and back, and catch; a NeGcon booting with I settling as a NeGcon
+      and staying one when START and A are pressed together;
+    - the same Volume on a simulated flaky link (a third of the reads
+      failed, a few percent garbled): it stayed a Volume through the
+      language screen, menus and the card select dial (glitchtest.py);
+    - the English builds booting straight into MD3EN.EXE, PAL and NTSC;
+    - the Volume in menus: mode select, Options rows, MOUSE SPEED with
+      B + knob, B tap = back, difficulty select (volmenu.py); and in play:
+      A then B pulls a row down, both held 2 s pauses (volchord.py).
+- Not tested yet:
+    - a real BIOS or real hardware, and the MiSTer PSX core;
+    - Competition mode's board and mini-games (they use the same play
+      code, but weren't played through);
+    - real NeGcon twist ranges (tunable with nrange);
+    - a real Namco Volume (its knob direction and end values are from
+      the psx-spx documentation; flip with invert, trim with vlo/vhi);
+    - a real JP3 spinner wired into a pad, and the emulator's handling of
+      LEFT+RIGHT together (PCSX-ReARMed passes it through as-is).

@@ -1,0 +1,14 @@
+build/
+work/
+shots/
+st/
+cov/
+__pycache__/
+*.pyc
+*.bin
+*.cue
+*.chd
+*.EXE
+*.iso
+node_modules/
+shot_*.png

@@ -1,0 +1,63 @@
+diff --git a/libpcsxcore/psxinterpreter.c b/libpcsxcore/psxinterpreter.c
+index 900c0cd..cb4a7c3 100644
+--- a/libpcsxcore/psxinterpreter.c
++++ b/libpcsxcore/psxinterpreter.c
+@@ -27,6 +27,19 @@
+ #include "gte.h"
+ #include "psxhle.h"
+ #include "psxinterpreter.h"
++
++/* --- debug hooks (md3 harness) --- */
++#include <stdint.h>
++__attribute__((visibility("default"))) uint32_t retro_dbg_bpmap[0x200000/4/32];
++__attribute__((visibility("default"))) void (*retro_dbg_bpcb)(void *regs, uint32_t pc);
++__attribute__((visibility("default"))) uint32_t retro_dbg_wlo, retro_dbg_wsize;
++__attribute__((visibility("default"))) void (*retro_dbg_wcb)(void *regs, uint32_t pc, uint32_t addr, uint32_t val, int size);
++__attribute__((visibility("default"))) uint32_t retro_dbg_rlo, retro_dbg_rsize;
++__attribute__((visibility("default"))) void (*retro_dbg_rcb)(void *regs, uint32_t pc, uint32_t addr, int size);
++__attribute__((visibility("default"))) uint32_t retro_dbg_xmap[0x200000/4/32];
++__attribute__((visibility("default"))) uint32_t retro_dbg_wmap[0x200000/4/32];
++#define DBGW(addr,val,sz) do{ uint32_t _a=(addr); if(((_a>>24)&0x1f)==0 || (_a>>28)==8 || (_a>>28)==0xa){uint32_t _i=(_a&0x1ffffc)>>2; retro_dbg_wmap[_i>>5]|=1u<<(_i&31);} if (retro_dbg_wcb && (_a&0x1fffffff)-retro_dbg_wlo < retro_dbg_wsize) retro_dbg_wcb(regs_, regs_->pc-4, _a, (val), sz);}while(0)
++#define DBGR(addr,sz) do{ uint32_t _a=(addr); if (retro_dbg_rcb && (_a&0x1fffffff)-retro_dbg_rlo < retro_dbg_rsize) retro_dbg_rcb(regs_, regs_->pc-4, _a, sz);}while(0)
+ #include <stddef.h>
+ #include <assert.h>
+ #include "../include/compiler_features.h"
+@@ -800,11 +813,11 @@ static inline int checkST(psxRegisters *regs, u32 addr, u32 m) {
+ 
+ #define _oB_ (regs_->GPR.r[_Rs_] + _Imm_)
+ 
+-OP(psxLB)  { doLoad(regs_, _Rt_,  (s8)psxMemRead8(regs_, _oB_)); }
+-OP(psxLBU) { doLoad(regs_, _Rt_,      psxMemRead8(regs_, _oB_)); }
+-OP(psxLH)  { doLoad(regs_, _Rt_, (s16)psxMemRead16(regs_, _oB_ & ~1)); }
+-OP(psxLHU) { doLoad(regs_, _Rt_,      psxMemRead16(regs_, _oB_ & ~1)); }
+-OP(psxLW)  { doLoad(regs_, _Rt_,      psxMemRead32(regs_, _oB_ & ~3)); }
++OP(psxLB)  { DBGR(_oB_,1); doLoad(regs_, _Rt_,  (s8)psxMemRead8(regs_, _oB_)); }
++OP(psxLBU) { DBGR(_oB_,1); doLoad(regs_, _Rt_,      psxMemRead8(regs_, _oB_)); }
++OP(psxLH)  { DBGR(_oB_,2); doLoad(regs_, _Rt_, (s16)psxMemRead16(regs_, _oB_ & ~1)); }
++OP(psxLHU) { DBGR(_oB_,2); doLoad(regs_, _Rt_,      psxMemRead16(regs_, _oB_ & ~1)); }
++OP(psxLW)  { DBGR(_oB_,4); doLoad(regs_, _Rt_,      psxMemRead32(regs_, _oB_ & ~3)); }
+ 
+ OP(psxLBe)  { if (checkLD(regs_, _oB_, 0)) doLoad(regs_, _Rt_,  (s8)psxMemRead8(regs_, _oB_)); }
+ OP(psxLBUe) { if (checkLD(regs_, _oB_, 0)) doLoad(regs_, _Rt_,      psxMemRead8(regs_, _oB_)); }
+@@ -870,9 +883,9 @@ OP(psxLWR) { doLWR(regs_, _Rt_, _oB_); }
+ OP(psxLWLe) { if (checkLD(regs_, _oB_ & ~3, 0)) doLWL(regs_, _Rt_, _oB_); }
+ OP(psxLWRe) { if (checkLD(regs_, _oB_     , 0)) doLWR(regs_, _Rt_, _oB_); }
+ 
+-OP(psxSB) { psxMemWrite8 (regs_, _oB_, _rRt_); }
+-OP(psxSH) { psxMemWrite16(regs_, _oB_, _rRt_); }
+-OP(psxSW) { psxMemWrite32(regs_, _oB_, _rRt_); }
++OP(psxSB) { DBGW(_oB_,_rRt_,1); psxMemWrite8 (regs_, _oB_, _rRt_); }
++OP(psxSH) { DBGW(_oB_,_rRt_,2); psxMemWrite16(regs_, _oB_, _rRt_); }
++OP(psxSW) { DBGW(_oB_,_rRt_,4); psxMemWrite32(regs_, _oB_, _rRt_); }
+ 
+ OP(psxSBe) { if (checkST(regs_, _oB_, 0)) psxMemWrite8 (regs_, _oB_, _rRt_); }
+ OP(psxSHe) { if (checkST(regs_, _oB_, 1)) psxMemWrite16(regs_, _oB_, _rRt_); }
+@@ -1168,6 +1181,8 @@ static inline void execI_(
+ {
+ 	u32 pc = regs->pc;
+ 
++	retro_dbg_xmap[(pc&0x1ffffc)>>7] |= 1u<<((pc>>2)&31);
++	if (retro_dbg_bpcb && (retro_dbg_bpmap[(pc&0x1ffffc)>>7] & (1u<<((pc>>2)&31)))) retro_dbg_bpcb(regs, pc);
+ 	addCycle(regs);
+ 	dloadStep(regs);
+ 

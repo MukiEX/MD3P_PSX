@@ -1,0 +1,327 @@
+<title>Magical Drop III Paddle Edition Patcher</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column of numbered steps under a balloon-field masthead; reference notes below. */
+:root {
+  --bg: #F2F0F9; --surface: #FFFFFF; --fg: #1D1930; --muted: #5F5979; --line: #DAD5EA;
+  --accent: #5636D1; --accent-fg: #FFFFFF; --accent-soft: #E6E0FB;
+  --ok: #1D7F48; --bad: #B4232A; --bad-soft: #FBE4E5; --ok-soft: #DDF3E6;
+  --b-red: #E5484D; --b-yel: #F2B33A; --b-grn: #36AE67; --b-blu: #3A86EC; --b-pur: #9A5BE0;
+  --f-display: "Bagel Fat One", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif;
+  --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #14111E; --surface: #1E1A2C; --fg: #ECE8F7; --muted: #A49EBD; --line: #322C46;
+  --accent: #A58FFF; --accent-fg: #14111E; --accent-soft: #2B2447;
+  --ok: #5BD08C; --bad: #FF7A80; --bad-soft: #3A1C22; --ok-soft: #183526; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #14111E; --surface: #1E1A2C; --fg: #ECE8F7; --muted: #A49EBD; --line: #322C46;
+  --accent: #A58FFF; --accent-fg: #14111E; --accent-soft: #2B2447;
+  --ok: #5BD08C; --bad: #FF7A80; --bad-soft: #3A1C22; --ok-soft: #183526; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px }
+.wrap { max-width: 720px; margin: 0 auto; display: grid; gap: 28px }
+h1, h2 { text-wrap: balance; margin: 0 }
+h1 { font: 400 clamp(2rem, 6.5vw, 3.1rem)/1.02 var(--f-display); letter-spacing: .005em }
+h1 small { display: block; font: 700 .8rem/1.4 var(--f-body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px }
+h2 { font: 400 1.35rem/1.2 var(--f-display) }
+p { margin: 0 }
+.lede { color: var(--muted); max-width: 60ch }
+code, .mono { font-family: var(--f-mono); font-size: .88em }
+
+/* masthead balloon field: the targeted column pulses, like the in-game paddle cursor */
+.mast { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: end }
+.field { display: grid; grid-template-columns: repeat(7, 14px); gap: 4px; padding: 8px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line) }
+.field i { width: 14px; height: 14px; border-radius: 50%; display: block }
+.field i.t { animation: pulse .96s linear infinite }
+.field .clown { grid-column: 4; width: 14px; height: 10px; margin-top: 2px; background: var(--fg); clip-path: polygon(50% 0, 100% 100%, 0 100%) }
+@keyframes pulse { 0%,100% { filter: brightness(.5) } 50% { filter: brightness(1.25) } }
+@media (max-width: 460px) { .mast { grid-template-columns: 1fr } .field { justify-self: start } }
+
+.steps { display: grid; gap: 14px; counter-reset: step }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 12px; min-width: 0 }
+.step-h { display: flex; gap: 12px; align-items: baseline }
+.step-h::before { counter-increment: step; content: counter(step); font: 400 1rem/1 var(--f-display); color: var(--accent-fg); background: var(--accent); width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; transform: translateY(4px) }
+.hint { color: var(--muted); font-size: .93rem }
+
+.drop { display: grid; gap: 6px; justify-items: start; padding: 18px; border: 2px dashed var(--line); border-radius: 12px; cursor: pointer; transition: border-color .15s, background .15s }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft) }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0 }
+.drop:focus-within { outline: 3px solid var(--accent); outline-offset: 2px }
+.drop strong { font-size: 1.02rem }
+.fileinfo { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; min-width: 0 }
+.fileinfo .name { font-weight: 700; overflow-wrap: anywhere; min-width: 0 }
+.chip { font: 600 .74rem/1 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--fg) }
+
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px }
+.choice { position: relative; display: grid; gap: 4px; padding: 14px 16px 14px 44px; border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer; min-width: 0 }
+.choice input { position: absolute; left: 16px; top: 17px; accent-color: var(--accent); width: 16px; height: 16px; margin: 0 }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft) }
+.choice:has(input:disabled) { opacity: .5; cursor: not-allowed }
+.choice:focus-within { outline: 3px solid var(--accent); outline-offset: 2px }
+.choice b { font-size: 1rem }
+.check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: .95rem }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 3px 0 0; flex: none }
+.check:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px }
+.choice span { color: var(--muted); font-size: .9rem }
+
+.go { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
+button { font: 700 1rem/1 var(--f-body); border: 0; border-radius: 999px; padding: 14px 22px; cursor: pointer; background: var(--accent); color: var(--accent-fg) }
+button:disabled { opacity: .45; cursor: not-allowed }
+button:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px }
+button.ghost { background: transparent; color: var(--fg); border: 1.5px solid var(--line) }
+.bar { height: 10px; border-radius: 999px; background: var(--accent-soft); overflow: hidden }
+.bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--b-red), var(--b-yel), var(--b-grn), var(--b-blu), var(--b-pur)); transition: width .2s }
+.status { font-size: .95rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.msg { padding: 12px 14px; border-radius: 10px; font-size: .95rem; overflow-wrap: anywhere }
+.msg.err { background: var(--bad-soft); color: var(--bad) }
+.msg.ok { background: var(--ok-soft); color: var(--ok) }
+.result { display: grid; gap: 12px }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: .9rem }
+dl.kv dt { color: var(--muted) }
+dl.kv dd { margin: 0; font-family: var(--f-mono); overflow-wrap: anywhere; min-width: 0 }
+
+.notes { display: grid; gap: 14px }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; min-width: 480px }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font: 700 .74rem/1.2 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted) }
+tr:last-child td { border-bottom: 0 }
+ul.feat { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; max-width: 64ch }
+footer { color: var(--muted); font-size: .85rem; display: grid; gap: 4px }
+@media (prefers-reduced-motion: reduce) { .field i.t { animation: none; filter: brightness(1.2) } .bar > div { transition: none } }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <h1><small>PlayStation · SLES-02964</small>Magical Drop III<br>Paddle Edition</h1>
+    </div>
+    <div class="field" aria-hidden="true" id="field"></div>
+  </header>
+  <p class="lede">Patches your Magical Drop III (Europe) disc image for the PlayStation Mouse, the NeGcon, the Namco Volume paddle and a JP3-style spinner on the d-pad: an analog paddle for the clown, gliding movement, a pulsing target column, and all hidden characters unlocked. Everything runs in this page; your image never leaves your computer.</p>
+
+  <section class="steps" aria-label="Patch steps">
+    <div class="step">
+      <h2 class="step-h">Choose your disc image</h2>
+      <label class="drop" id="drop" for="file">
+        <input type="file" id="file" accept=".chd,.bin,.img">
+        <strong>Drop a .chd or .bin here, or click to browse</strong>
+        <span class="hint">Redump dump, single-track BIN (455,700,000 bytes) or a CHD made from it.</span>
+      </label>
+      <div class="fileinfo" id="fileinfo" hidden>
+        <span class="name" id="fname"></span><span class="chip" id="ftype"></span><span class="hint" id="fsize"></span>
+      </div>
+    </div>
+
+    <div class="step">
+      <h2 class="step-h">Pick a version</h2>
+      <div class="choices" role="radiogroup" aria-label="Video mode">
+        <label class="choice"><input type="radio" name="variant" id="v-pal" value="pal" checked><b>PAL 50 Hz</b><span>Same timing and screen as the original release.</span></label>
+        <label class="choice"><input type="radio" name="variant" id="v-ntsc" value="ntsc"><b>NTSC 60 Hz</b><span>Full-speed 60 Hz output with the game's speed normalized.</span></label>
+      </div>
+      <label class="check" for="skip"><input type="checkbox" id="skip"><span><b>Start in English</b> and skip the language screen. On by default for NTSC.</span></label>
+    </div>
+
+    <div class="step">
+      <h2 class="step-h">Pick an output</h2>
+      <div class="choices" role="radiogroup" aria-label="Output format">
+        <label class="choice"><input type="radio" name="fmt" id="f-chd" value="chd" checked><b>CHD</b><span>About 200 MB. Only the changed hunks are rewritten. Needs a CHD as input.</span></label>
+        <label class="choice"><input type="radio" name="fmt" id="f-bin" value="bin"><b>BIN + CUE</b><span>455 MB, works everywhere: emulators, ODEs, burning.</span></label>
+      </div>
+      <p class="hint">The result is saved as a .zip (stored, not compressed) so both files arrive together.</p>
+    </div>
+
+    <div class="step">
+      <h2 class="step-h">Patch</h2>
+      <div class="go">
+        <button id="go" disabled>Patch image</button>
+        <span class="status" id="status">Choose a disc image first.</span>
+      </div>
+      <div class="bar" id="bar" hidden><div id="barfill"></div></div>
+      <div class="msg err" id="err" role="alert" hidden></div>
+      <div class="result" id="result" hidden>
+        <div class="msg ok" id="okmsg"></div>
+        <dl class="kv" id="kv"></dl>
+        <div class="go"><button id="save">Save ZIP</button><span class="status" id="savestatus"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes" aria-label="About the patch">
+    <h2>Controls</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Controller</th><th>In play</th><th>Menus</th></tr></thead>
+        <tbody>
+          <tr><td><b>Mouse</b> (either port)</td><td>Move left and right to drive the paddle. Left button catches, right button throws. MOUSE SPEED in Options sets ×0.25 to ×2.</td><td>Left = ×, right = △, both = START. Walk the character cards and name letters by moving the mouse.</td></tr>
+          <tr><td><b>NeGcon</b> (either port)</td><td>The twist is the paddle position; letting go springs the clown back to the middle column. Buttons act as their pad equivalents for catch and throw.</td><td>I = ×, II = □, A = ○, B = △, L/R = L1/R1. Twist to walk the cards.</td></tr>
+          <tr><td><b>Namco Volume</b> (either port)</td><td>The knob is the paddle position, wall to wall. A catches, B throws. Hold A and press B to pull down a row. Hold both for 2 seconds to pause.</td><td>Works straight away. Turn to move up and down, hold B and turn to change a value. A = ×, a tap of B = back, A+B = START. Card select is a dial over all the cards. A NeGcon is told apart the first time it uses a control the Volume doesn't have, such as I.</td></tr>
+          <tr><td><b>JP3 spinner</b> on a pad's d-pad (either port)</td><td>LEFT is phase A, RIGHT is phase B. Turns on the first time both read pressed, which a d-pad can't do. Then it drives the paddle like the mouse: 4 edges per column at ×1. The pad's other buttons work as normal.</td><td>Turn to step left/right, walk the cards and pick letters. On the language screen, 4 edges = one flag.</td></tr>
+          <tr><td><b>Pad / DualShock</b></td><td colspan="2">Unchanged until LEFT and RIGHT are pressed together.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h2>What changes</h2>
+    <ul class="feat">
+      <li>The clown follows a virtual paddle, one column per tick, through the game's own movement code, so sounds and animations stay.</li>
+      <li>The clown and aim line glide between columns, and the column you point at pulses.</li>
+      <li>Over a column whose bottom balloon matches what you hold, the mouse slows to half speed and the NeGcon gets sticky.</li>
+      <li>The PS1 reads pads once per frame, so a JP3 spinner keeps up to 2 edges per frame (100 or 120 per second); faster turns need an adapter that paces its edges.</li>
+      <li>Options gains a MOUSE SPEED row. Card select, name entry and the language screen accept the mouse and the NeGcon.</li>
+      <li>All hidden characters are unlocked. All six languages are patched.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>Expected source: Magical Drop III (Europe) (En,Fr,De,Es,It,Nl), data CRC32 <span class="mono">FE561E70</span>.</span>
+    <span>Patched BIN CRC32: PAL <span class="mono">6A644BE1</span> (English start <span class="mono">804A7D47</span>), NTSC 60 Hz <span class="mono">4C9B268E</span> (English start <span class="mono">A6B51028</span>).</span>
+  </footer>
+</div>
+
+<script type="text/plain" id="worker-src">
+/*CHD_JS*/
+/*CORE_JS*/
+const PATCHES = { pal: "/*PATCH_PAL*/", pale: "/*PATCH_PALE*/", ntsc: "/*PATCH_NTSC*/", ntsce: "/*PATCH_NTSCE*/" };
+function b64(s) { const bin = atob(s); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
+function zipStore(files) {
+  // files: [{name, parts, size, crc}] -> Blob parts (stored zip, no compression)
+  const enc = new TextEncoder(), out = [], central = []; let off = 0;
+  const d = new Date(), dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(), tm = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  for (const f of files) {
+    const nm = enc.encode(f.name), h = new Uint8Array(30 + nm.length), v = new DataView(h.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true); v.setUint16(8, 0, true);
+    v.setUint16(10, tm, true); v.setUint16(12, dt, true); v.setUint32(14, f.crc, true); v.setUint32(18, f.size, true); v.setUint32(22, f.size, true);
+    v.setUint16(26, nm.length, true); h.set(nm, 30);
+    const c = new Uint8Array(46 + nm.length), cv = new DataView(c.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x0800, true);
+    cv.setUint16(12, tm, true); cv.setUint16(14, dt, true); cv.setUint32(16, f.crc, true); cv.setUint32(20, f.size, true); cv.setUint32(24, f.size, true);
+    cv.setUint16(28, nm.length, true); cv.setUint32(42, off, true); c.set(nm, 46);
+    out.push(h, ...f.parts); central.push(c); off += h.length + f.size;
+  }
+  let cs = 0; for (const c of central) cs += c.length;
+  const e = new Uint8Array(22), ev = new DataView(e.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true); ev.setUint32(12, cs, true); ev.setUint32(16, off, true);
+  return [...out, ...central, e];
+}
+self.onmessage = (ev) => {
+  const { file, variant, fmt, isChd } = ev.data;
+  try {
+    const fr = new FileReaderSync();
+    const src = { size: file.size, read: (o, l) => new Uint8Array(fr.readAsArrayBuffer(file.slice(o, o + l))), slice: (o, l) => file.slice(o, o + l) };
+    let last = 0;
+    const progress = (x) => { const now = Date.now(); if (now - last > 120 || x >= 1) { last = now; self.postMessage({ type: 'progress', value: x }); } };
+    const z = b64(PATCHES[variant]);
+    const base = 'Magical Drop III Paddle Edition (Europe) (' + (variant.startsWith('pal') ? 'PAL' : 'NTSC 60Hz') + (variant.endsWith('e') ? ', English' : '') + ')';
+    const r = isChd ? patchCHD(src, z, variant, fmt, progress) : patchBIN(src, z, variant, progress);
+    self.postMessage({ type: 'progress', value: 1, packing: true });
+    let files;
+    if (fmt === 'chd') files = [{ name: base + '.chd', parts: r.parts, size: r.fileSize, crc: r.fileCrc }];
+    else {
+      const cue = new TextEncoder().encode('FILE "' + base + '.bin" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n');
+      files = [{ name: base + '.bin', parts: r.parts, size: r.fileSize, crc: r.fileCrc }, { name: base + '.cue', parts: [cue], size: cue.length, crc: crc32(0, cue) }];
+    }
+    const blob = new Blob(zipStore(files), { type: 'application/zip' });
+    self.postMessage({ type: 'done', blob, name: base + '.zip', crc: r.crc, fmt, files: files.map(f => ({ name: f.name, size: f.size, crc: f.crc })), rawsha: r.rawsha ? Array.from(r.rawsha) : null });
+  } catch (e) { self.postMessage({ type: 'error', message: e && e.message ? e.message : String(e) }); }
+};
+</script>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  // masthead balloons
+  const cols = ['--b-red', '--b-yel', '--b-grn', '--b-blu', '--b-pur'];
+  const heights = [3, 2, 4, 3, 1, 2, 3], target = 3; const field = $('field');
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 7; c++) {
+    const i = document.createElement('i');
+    if (r < heights[c]) { i.style.background = 'var(' + cols[(c * 3 + r * 2 + (c === target ? 0 : r)) % 5] + ')'; if (c === target) { i.className = 't'; i.style.background = 'var(--b-blu)'; } }
+    field.appendChild(i);
+  }
+  const cl = document.createElement('span'); cl.className = 'clown'; field.appendChild(cl);
+
+  let file = null, isChd = false, worker = null, result = null;
+  const fmt = () => document.querySelector('input[name=fmt]:checked').value;
+  const variant = () => document.querySelector('input[name=variant]:checked').value + ($('skip').checked ? 'e' : '');
+  // the English start follows the video mode until it's set by hand
+  let skipTouched = false;
+  $('skip').addEventListener('change', () => { skipTouched = true; });
+  document.querySelectorAll('input[name=variant]').forEach(i => i.addEventListener('change', () => { if (!skipTouched) $('skip').checked = $('v-ntsc').checked; }));
+  const mb = (n) => n < 1e5 ? n.toLocaleString('en') + ' bytes' : (n / 1e6).toFixed(n > 1e8 ? 0 : 1) + ' MB';
+  const hex = (x) => (x >>> 0).toString(16).toUpperCase().padStart(8, '0');
+  const showErr = (m) => { $('err').textContent = m; $('err').hidden = !m; };
+
+  async function pick(f) {
+    if (!f) return;
+    file = f; result = null; $('result').hidden = true; showErr('');
+    const head = new Uint8Array(await f.slice(0, 8).arrayBuffer());
+    isChd = String.fromCharCode(...head) === 'MComprHD';
+    $('fname').textContent = f.name; $('ftype').textContent = isChd ? 'CHD' : 'BIN'; $('fsize').textContent = f.size.toLocaleString('en') + ' bytes';
+    $('fileinfo').hidden = false;
+    $('f-chd').disabled = !isChd;
+    if (!isChd) $('f-bin').checked = true; else $('f-chd').checked = true;
+    if (!isChd && f.size !== 455700000) showErr('This BIN is ' + f.size.toLocaleString('en') + ' bytes; the Redump image is 455,700,000 bytes. If your dump is split into several tracks or has a different size, it will not match.');
+    $('go').disabled = false; $('status').textContent = 'Ready.';
+  }
+  $('file').addEventListener('change', (e) => pick(e.target.files[0]));
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, () => drop.classList.remove('over')));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); pick(e.dataTransfer.files[0]); });
+  document.querySelectorAll('input[name=variant],input[name=fmt],#skip').forEach(i => i.addEventListener('change', () => { if (result) { result = null; $('result').hidden = true; $('status').textContent = 'Settings changed. Patch again.'; } }));
+
+  $('go').addEventListener('click', () => {
+    if (!file) return;
+    showErr(''); $('result').hidden = true; result = null;
+    $('go').disabled = true; $('bar').hidden = false; $('barfill').style.width = '0';
+    $('status').textContent = isChd ? 'Decompressing and checking the disc…' : 'Checking the disc…';
+    if (worker) worker.terminate();
+    const src = document.getElementById('worker-src').textContent;
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    const t0 = performance.now();
+    worker.onmessage = (ev) => {
+      const m = ev.data;
+      if (m.type === 'progress') {
+        $('barfill').style.width = (m.value * 100).toFixed(1) + '%';
+        $('status').textContent = m.packing ? 'Packing the ZIP…' : (isChd ? 'Decompressing and checking' : 'Checking') + '… ' + Math.floor(m.value * 100) + '%';
+      } else if (m.type === 'error') {
+        showErr(m.message); $('status').textContent = 'Not patched.'; $('go').disabled = false; $('bar').hidden = true;
+      } else if (m.type === 'done') {
+        result = m; $('go').disabled = false;
+        $('status').textContent = 'Done in ' + ((performance.now() - t0) / 1000).toFixed(0) + ' s.';
+        $('okmsg').textContent = 'Source verified and patched (' + (variant().startsWith('pal') ? 'PAL 50 Hz' : 'NTSC 60 Hz') + (variant().endsWith('e') ? ', English' : '') + '). Patched data CRC32 ' + hex(m.crc) + ' matches the release.';
+        const kv = $('kv'); kv.textContent = '';
+        const add = (k, v) => { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; kv.append(dt, dd); };
+        m.files.forEach(f => add(f.name.split('.').pop().toUpperCase(), f.name + ' · ' + mb(f.size) + ' · CRC32 ' + hex(f.crc)));
+        if (m.rawsha) add('Data SHA-1', m.rawsha.map(b => b.toString(16).padStart(2, '0')).join(''));
+        $('savestatus').textContent = mb(m.blob.size) + ' ZIP';
+        $('result').hidden = false; $('save').focus();
+      }
+    };
+    worker.onerror = (e) => { showErr('The patcher stopped unexpectedly: ' + (e.message || 'unknown error') + '. If the browser ran out of memory, try the CHD output or another browser.'); $('go').disabled = false; };
+    worker.postMessage({ file, variant: variant(), fmt: fmt(), isChd });
+  });
+
+  let dl = null, dlAsked = false;
+  const getDl = async () => { if (!dlAsked && window.claude && window.claude.use) { dlAsked = true; try { dl = await window.claude.use('downloads'); } catch (e) { dl = null; } } return dl; };
+  setTimeout(getDl, 0);
+  $('save').addEventListener('click', async () => {
+    if (!result) return;
+    await getDl();
+    if (dl) {
+      try { await dl.save({ filename: result.name, data: result.blob }); $('savestatus').textContent = 'Saved ' + result.name; }
+      catch (e) { $('savestatus').textContent = e && e.code === 'declined' ? 'Save cancelled.' : 'Could not save: ' + (e && e.message ? e.message : e); }
+      return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(result.blob); a.download = result.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    $('savestatus').textContent = 'Download started: ' + result.name;
+  });
+})();
+</script>
