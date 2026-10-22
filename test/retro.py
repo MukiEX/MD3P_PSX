@@ -21,7 +21,7 @@ class Emu:
         if opts: s.opts.update(opts)
         s._keep=[]; s.pad=[set(),set()]; s.mouse=[[0,0,0,0],[0,0,0,0]]; s.analog=[[0,0,0,0],[0,0,0,0]]
         s.frame=None; s.fmt=1; s.nframes=0
-        s.sysdir=C.c_char_p(bROOT+'/sys')
+        s.sysdir=C.c_char_p((ROOT+'/work/sys').encode())
         s.envcb=ENVCB(s._env); s.vidcb=VIDCB(s._vid); s.ascb=ASCB(lambda l,r:None); s.abcb=ABCB(lambda d,n:n)
         s.ipcb=IPCB(lambda:None); s.iscb=ISCB(s._in)
         L=s.lib
