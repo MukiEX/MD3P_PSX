@@ -117,6 +117,15 @@ footer { color: var(--muted); font-size: .85rem; display: grid; gap: 4px }
 .flow .arr { color: var(--muted); font: 700 1.2rem/1 var(--f-body); text-align: center }
 .flow figcaption { grid-column: 1 / -1; color: var(--muted); font-size: .88rem; margin-top: 4px }
 @media (max-width: 600px) { .flow { grid-template-columns: 1fr } .flow .arr { transform: rotate(90deg) } }
+.panel > *, .wrap > * { min-width: 0 }
+details.dev { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px 20px }
+details.dev > summary { cursor: pointer; padding: 14px 0; font: 400 1.2rem/1.2 var(--f-display); list-style-position: outside }
+details.dev[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 14px }
+details.dev h3 { font: 700 .8rem/1.3 var(--f-body); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 18px 0 8px }
+details.dev pre { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font: .82rem/1.5 var(--f-mono); margin: 0 }
+details.dev .tbl table { min-width: 520px; font-size: .86rem }
+details.dev td code, details.dev li code, details.dev p code { overflow-wrap: anywhere }
+details.dev > *:last-child { margin-bottom: 18px }
 .callout { border-left: 4px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: .95rem; max-width: 64ch }
 @media (prefers-reduced-motion: reduce) { .field i.t { animation: none; filter: brightness(1.2) } .bar > div { transition: none } }
 </style>
@@ -299,6 +308,98 @@ footer { color: var(--muted); font-size: .85rem; display: grid; gap: 4px }
       <h2>How the patcher works</h2>
       <p>Everything happens in your browser, in a background worker. A CHD is decompressed hunk by hunk (LZMA, Deflate and FLAC, with the CD error correction regenerated) and its checksum compared with the Redump dump before anything is changed. For CHD output, untouched hunks are copied straight from your file, and only the handful that changed are rewritten, so a new 200 MB CHD comes out in under a minute. The result is wrapped in an uncompressed ZIP so a BIN and its CUE arrive together.</p>
     </section>
+
+    <details class="dev">
+      <summary>Developer notes: picking the work back up</summary>
+      <p>Everything below refers to the <code>MD3P_PSX</code> repo. Addresses are for <code>MD3EN.EXE</code> unless stated; <code>docs/TECHNICAL.md</code> has the long version and <code>docs/CHANGES.txt</code> the user-facing behaviour.</p>
+
+      <h3>Source image and outputs</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Item</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Source</td><td>Redump <i>Magical Drop III (Europe) (En,Fr,De,Es,It,Nl)</i>, SLES-02964, one MODE2/2352 track, 455,700,000 bytes, CRC32 <code>FE561E70</code></td></tr>
+          <tr><td>Files patched</td><td><code>SLES_029.64</code> (language selector, loads at 0x80010000) and <code>MD3EN/FR/GE/IT/SP/NL.EXE</code> (1,030,144 bytes each), rewritten in place; only changed sectors get new EDC/ECC</td></tr>
+          <tr><td>Builds</td><td>PAL <code>6A644BE1</code>, PAL English <code>804A7D47</code>, NTSC <code>4C9B268E</code>, NTSC English <code>A6B51028</code> (whole-BIN CRC32; a clean build must reproduce them)</td></tr>
+          <tr><td>Patcher keys</td><td><code>pal</code>, <code>pale</code>, <code>ntsc</code>, <code>ntsce</code>; <code>web/core.js</code> lists them in <code>crcPatched</code> and every earlier release in <code>crcOld</code> (add the old CRCs there when the patch changes)</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Build</h3>
+      <pre>ARMIPS=/path/armips XDELTA3=/path/xdelta3 scripts/build_all.sh original.bin
+# 1 extract EXEs        tools/extract_exes.py  -> build/orig
+# 2 game EXEs           tools/build.py build/orig build/pal  [--ntsc]
+# 3 hazard check        tools/hazards.py src/*.asm   (must print nothing)
+# 4 selector            armips src/sles_paddle.asm -equ NTSC n -equ SKIPLANG n
+# 5 disc + patches      tools/patchdisc.py, xdelta3, tools/make_ppf.py
+# 6 this page           web/make_patchdata.py, web/build_html.py -> releases/</pre>
+      <p><code>SKIPLANG</code> and <code>NTSC</code> must always be passed with <code>-equ</code>: armips refuses <code>.ifndef</code> defaults and <code>equ</code> inside <code>.if</code>, so derived constants are written as expressions (<code>VHOLDN equ 100 + NTSC*20</code>).</p>
+
+      <h3>How build.py places the code</h3>
+      <ul>
+        <li>Hook sites are found in each language EXE by masked signatures taken from MD3EN (immediates and jump targets masked); the original instructions are verified before writing. The EN addresses are the <code>G_*</code> table at the top of <code>tools/build.py</code> and become <code>syms_XX.asm</code> includes.</li>
+        <li>Free space: functions no path from the entry point or any pointer-like word reaches, at least 0x40 bytes and starting at an <code>addiu sp,sp,-n</code> prologue, plus the EXE tail 0x8010A8E0–0x8010B000 (the heap-start <code>lui</code> at 0x80063684 now points at 0x8010B000 so InitHeap stops writing there).</li>
+        <li>The asm is split into chunks marked <code>;@chunk name</code>: cfg, state, padinit, padread, padone, padneg, padnegb, padvol, padvplay, tick, tick2, tick3, vol, volcard, clown, glide, cell, cursor, opt, name (20 chunks, about 6 KB). Each is measured, then packed best-fit largest-first with a backtracking search; <code>build_log.json</code> records every placement.</li>
+        <li>Chunks land anywhere, so cross-chunk branches go through a local <code>j</code> trampoline, and a chunk entered with <code>jal</code> returns a status in <code>v1</code> (0 done, 1 continue as mouse at <code>@@mbtn</code>, 2 failed read) instead of jumping into the caller's <code>@@</code> labels (a static <code>@label</code> also ends the <code>@@</code> scope).</li>
+        <li>If a new chunk won't fit, split chunks below the size of the ninth-largest hole; total space (8.5–9.8 KB per language) has never been the limit, fragmentation has.</li>
+      </ul>
+
+      <h3>Game hooks (MD3EN)</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Symbol</th><th>Address</th><th>What happens there</th></tr></thead>
+        <tbody>
+          <tr><td><code>G_PadInitTail</code></td><td><code>0x8006CB80</code></td><td><code>InitPAD(raw1,0x22,raw2,0x22)</code> (0x80063D4C), <code>StartPAD</code> (0x80063DDC), <code>ChangeClearPad(0)</code> instead of BIOS B(15h)</td></tr>
+          <tr><td><code>G_PadRead</code></td><td><code>0x8006CBAC</code></td><td>returns <code>p1 | p2&lt;&lt;16</code>, active high, built by <code>pad_one</code> per port</td></tr>
+          <tr><td><code>G_InputCall</code></td><td><code>0x8001447C</code></td><td>per-frame tick (paddle, menus); held/pressed words at <code>0x800A911C</code> / <code>0x800A9144</code></td></tr>
+          <tr><td><code>G_ClownHook</code></td><td><code>0x8003575C</code></td><td>in-game movement, <code>s0</code> = player struct (stored to <code>ST_PSTR</code>), replaces <code>lhu s2,0x366(s0)</code></td></tr>
+          <tr><td><code>G_ClownX</code> / <code>G_AimX</code></td><td><code>0x80025130</code> / <code>0x80024D84</code></td><td>glide: clown and aim line drawn at the paddle position</td></tr>
+          <tr><td><code>G_CellX</code> / <code>G_CellEnd</code></td><td><code>0x80024564</code> / <code>0x80024990</code></td><td>target column pulse via the fade brightness at <code>0x800A918E</code></td></tr>
+          <tr><td><code>G_Cursor</code></td><td><code>0x8005E5BC</code></td><td>card select (23 cards in reading order; Volume = absolute dial)</td></tr>
+          <tr><td><code>G_Unlock1–3</code></td><td><code>0x8005E748/7C8/800</code></td><td>hidden cards read as unlocked (flags at <code>0x800D84EC</code>, save data untouched)</td></tr>
+          <tr><td><code>G_Opt*</code></td><td><code>0x8005FE18</code> …</td><td>9th Options row MOUSE SPEED (item table, row count, cursor, value draw, Score row y)</td></tr>
+          <tr><td><code>G_NamePressed</code></td><td><code>0x8003BE74</code></td><td>ranking name entry, 8 mouse counts per letter</td></tr>
+          <tr><td><code>G_VidMode</code>, <code>G_ScrX/Y</code>, <code>G_MovX/Y</code></td><td><code>0x80013FA8</code> …</td><td>NTSC build only: video mode and centring offsets</td></tr>
+        </tbody>
+      </table></div>
+      <p>Player struct: <code>+0x18</code> column, <code>+0x1C</code> held colour, <code>+0x20</code> balloons held, <code>+0x358</code> catch mask, <code>+0x35A</code> throw mask, <code>+0x35C</code> pull-down mask, <code>+0x362/+0x364</code> left/right masks, <code>+0x366</code> buttons. Injected presses always use those masks (they follow Set operation).</p>
+
+      <h3>Selector (SLES_029.64)</h3>
+      <p>Hook at <code>0x800136B4</code> wraps its PadRead (<code>0x800131AC</code>); raw buffer <code>0x8001F4C0</code>; code lives in an unreachable 0x50C-byte function at <code>0x800122A4</code> (the asm asserts it fits). <code>SKIPLANG</code> replaces <code>jal 0x800133C0</code> at <code>0x80011660</code> with <code>ori v0,zero,0</code> (English). NTSC changes 0x80011474/540/55C/56C/574. The selector reads pads every other frame, so its NeGcon switch needs 2 reads, not 3.</p>
+
+      <h3>Per-port state (<code>ST_SIZE</code> 0x58, two copies)</h3>
+      <pre>00 TYPE  0 none 1 mouse-like 2 NeGcon   04 UNITS paddle pos (128/col)  08/0C DX/DY counts
+10/14 MACC/MACCY menu accumulators      18 TWIST raw twist/knob        20 TCOL column w/ hysteresis
+24/28/2C G/C/NSTAMP frame of last hook  30 STEP  34 NACC  38 RACC      3C MAG  40 STEPBIT
+44 JP3 latched   45 QPREV   46 QDIR     47 VOL   48 VZONE              49 NEG  4A BAD (30 = gone)
+4B NEGN  4C LAST (half, repeated on failed reads)  4E NEGS evidence mask
+50 VBH  51 VBACC  52 VCH (1 pause 2 pull 3 wait)   53 VHOLD  54 PSTR player struct</pre>
+
+      <h3>Controller rules</h3>
+      <ul>
+        <li>Raw buffer: byte 0 status (0 = good), byte 1 ID (0x41 digital, 0x73 analog, 0x12 mouse, 0x23 NeGcon/Volume), then active-low buttons and analog bytes. The ID byte is cleared after each read; still 0 next time = stale, repeat <code>ST_LAST</code>.</li>
+        <li>Failed read: repeat the last word, keep all detection state; 30 in a row = unplugged (resets JP3 and Volume/NeGcon). An 0x23 read with I, II and L all ≥ 0xF0 counts as failed.</li>
+        <li>0x23 is a Volume until NeGcon-only input (I/II/L past <code>cfg_nthr</code> 0x60, or any button other than START/CIRCLE) shows with an overlapping mask on 3 consecutive reads. Volume A = START bit, B = CIRCLE bit; knob in byte 4.</li>
+        <li>JP3: first read with LEFT+RIGHT latches; position = A xor 3B; delta 2 counts as two edges in the last direction; <code>cfg_jcnt</code> (8) mouse counts per edge.</li>
+        <li>Volume in play: A then B = pull down, both held <code>VHOLDN</code> (100 PAL / 120 NTSC) = pause; in menus knob = up/down, B + knob = left/right, B tap = △, A+B = START.</li>
+      </ul>
+
+      <h3>Tuning block</h3>
+      <p>A 44-byte block starting <code>"PDCF"</code> in the <code>cfg</code> chunk holds every constant (offsets in the asm comments): menu step 20 counts, name step 8, hysteresis 8, settle 8, power-on speed, magnet, pulse, glide, NeGcon dead zone/range/repeat/threshold, JP3 counts, speed table 1/2/4/8, pulse table, Volume range <code>vlo</code>/<code>vhi</code> 0x00/0xFF and step 2. Its address moves per build: <code>build/pal/build_log.json</code> lists, per language, every resolved <code>G_*</code> symbol and each chunk's address and size (<code>cfg</code> included).</p>
+
+      <h3>Tests</h3>
+      <p><code>test/retro.py</code> drives PCSX-ReARMed through libretro (<code>PCSX_CORE</code>; the interpreter build with <code>pcsx_rearmed_debug_hooks.diff</code> adds breakpoints, watchpoints and coverage). Scripts: <code>langtest</code> (all six languages), <code>jp3test</code>, <code>voltest</code>, <code>volmenu</code>, <code>volchord</code>, <code>glitchtest</code>, <code>mkstates</code>, <code>seq</code>. Assert from RAM via the build's symbols, rebuild savestates after any code move, and remember that switching a port's device in the emulator triggers the game's controller-removed pause. The NeGcon device in that core is 0x305; the Volume is tested as a NeGcon that never sends NeGcon-only input.</p>
+
+      <h3>Pitfalls already paid for</h3>
+      <ul>
+        <li>Load delay: never use a loaded register in the next executed instruction, including a branch target when the load is in a delay slot. The emulator hid two of these.</li>
+        <li>Two instructions between <code>mflo</code>/<code>mfhi</code> and the next <code>mult</code>/<code>div</code>; no pseudo-ops (<code>la</code>, <code>lw r,label</code>) in delay slots.</li>
+        <li>A+B in menus must stay START; the Volume B modifier must not swallow it or send △ on release.</li>
+      </ul>
+
+      <h3>Open items</h3>
+      <ul>
+        <li>Character select: Volume B should pick the alternate colour; waiting on which pad button the game uses for it.</li>
+      </ul>
+    </details>
   </div>
 
   <footer>
