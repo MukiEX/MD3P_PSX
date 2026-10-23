@@ -13,7 +13,7 @@
 ;  constants
 ; ---------------------------------------------------------------------
 W_UNITS     equ 128          ; paddle units per column
-ST_SIZE     equ 0x58
+ST_SIZE     equ 0x60
 NCARDORDER  equ 23
 OPT_ROWY    equ 0x88
 OPT_VALX    equ 0xB0
@@ -39,7 +39,7 @@ ST_NACC     equ 0x34         ; word  name entry accumulator
 ST_RACC     equ 0x38         ; word  negcon repeat accumulator
 ST_MAG      equ 0x3C         ; word  magnet: paddle column matches held colour
 ST_STEPBIT  equ 0x40         ; word  pad bit of the pending step (card select)
-ST_JP3      equ 0x44         ; byte  1 = this port's d-pad LEFT/RIGHT carry a JP3 spinner
+ST_JP3      equ 0x44         ; byte  JP3 spinner on this port: 1 = LEFT/RIGHT wiring, 2 = d-pad pairs wiring
 ST_QPREV    equ 0x45         ; byte  last quadrature position (0..3)
 ST_QDIR     equ 0x46         ; byte  last step direction (+1 / -1), for skipped samples
 ST_VOL      equ 0x47         ; byte  1 = the ID 0x23 controller is a Namco Volume (paddle knob)
@@ -55,6 +55,9 @@ ST_VCH      equ 0x52         ; byte  Volume in play, both held: 1 = pause, 2 = p
 ST_VHOLD    equ 0x53         ; byte  Volume in play: reads with both buttons held
 VHOLDN      equ 100 + NTSC*20  ; 2 s to pause (100 frames PAL, 120 NTSC)
 ST_PSTR     equ 0x54         ; word  this player's struct (set by the in-game hook)
+ST_JSWN     equ 0x58         ; byte  d-pad pairs: a LEFT/RIGHT <-> UP/DOWN swap was seen (unlatched)
+ST_JSWT     equ 0x5C         ; word  frame of that swap
+JSWWIN      equ 50 + NTSC*10 ; two swaps within this many frames (1 s) latch the pairs wiring
 
 PAD_UP      equ 0x1000
 PAD_RIGHT   equ 0x2000
@@ -305,66 +308,7 @@ pad_one:
     sb      zero, ST_VOL(t2)
     sb      zero, ST_NEG(t2)
 @@digital:
-    lbu     t5, 2(t0)
-    lbu     t6, 3(t0)
-    sll     t5, t5, 8
-    or      t5, t5, t6
-    xori    v0, t5, 0xFFFF
-    ; ---- JP3 "sensor" spinner on LEFT (phase A) / RIGHT (phase B).
-    ; A port turns into a spinner the first time LEFT and RIGHT read
-    ; pressed together, which a d-pad can't do; until then nothing changes.
-    andi    t8, v0, PAD_LEFT|PAD_RIGHT
-    srl     t5, t8, 15              ; A
-    srl     t6, t8, 13
-    andi    t6, t6, 1               ; B
-    sll     t7, t6, 1
-    addu    t6, t6, t7              ; 3B
-    xor     t5, t5, t6              ; position: 00->0 10->1 11->2 01->3
-    lbu     t7, ST_JP3(t2)
-    li      t9, PAD_LEFT|PAD_RIGHT
-    bnez    t7, @@jp3
-    nop
-    bne     t8, t9, @@dret          ; plain pad
-    li      t7, 1
-    sb      t7, ST_JP3(t2)          ; first L+R: latch
-    sb      t5, ST_QPREV(t2)
-    b       @@jstrip
-    sb      zero, ST_QDIR(t2)
-@@jp3:
-    lbu     t6, ST_QPREV(t2)
-    sb      t5, ST_QPREV(t2)
-    subu    t6, t5, t6
-    andi    t6, t6, 3               ; 1 = +1, 3 = -1, 2 = both phases changed
-    beqz    t6, @@jstrip
-    li      t7, 2
-    beq     t6, t7, @@jskip
-    li      t7, 1
-    beq     t6, t7, @@jstep
-    li      t9, 1
-    li      t9, -1
-@@jstep:
-    sb      t9, ST_QDIR(t2)
-@@jadd:
-    lbu     t7, cfg_jcnt
-    lw      t6, ST_DX(t2)
-    mult    t9, t7
-    mflo    t7
-    addu    t6, t6, t7
-    b       @@jstrip
-    sw      t6, ST_DX(t2)
-@@jskip:
-    ; a whole step went by between two reads: keep the last direction
-    lb      t9, ST_QDIR(t2)
-    nop
-    bnez    t9, @@jadd
-    sll     t9, t9, 1
-@@jstrip:
-    li      t7, 1                   ; drives the paddle like a mouse, no clicks
-    sb      t7, ST_TYPE(t2)
-    sb      zero, ST_MBTN(t2)
-    andi    v0, v0, 0xFFFF & ~(PAD_LEFT|PAD_RIGHT)
-@@dret:
-    jr      ra
+    j       pad_digital             ; plain pad / JP3 spinner (own chunk)
     nop
 @@stale:
     lhu     v0, ST_LAST(t2)
@@ -444,6 +388,144 @@ pad_one:
 @@chord:
     jr      ra
     li      v0, PAD_START
+
+;@chunk padjp3
+; =====================================================================
+;  Ordinary pad, plus a JP3 "sensor" spinner wired one of two ways:
+;   - LEFT = phase A, RIGHT = phase B (adapters, a spinner on the pad's
+;     lines): latches the first time LEFT and RIGHT read pressed together,
+;     which a d-pad can't do.
+;   - across the d-pad pairs, A = LEFT or RIGHT, B = UP or DOWN (an encoder
+;     inside a real pad, which can't report LEFT+RIGHT): latches when the
+;     pad goes straight from only-LEFT/RIGHT to only-UP/DOWN (or back)
+;     between two reads twice within a second. That is the encoder skipping
+;     a state; a thumb always passes a diagonal or the centre.
+;  In: t0 = raw buffer, t2 = port state, ra = PadRead's caller. Out: v0.
+;  Leaf, t5-t9.
+; =====================================================================
+pad_digital:
+    lbu     t5, 2(t0)
+    lbu     t6, 3(t0)
+    sll     t5, t5, 8
+    or      t5, t5, t6
+    xori    v0, t5, 0xFFFF
+    lbu     t7, ST_JP3(t2)
+    li      t9, 2
+    beq     t7, t9, @@pairs
+    andi    t8, v0, PAD_LEFT|PAD_RIGHT
+    srl     t5, t8, 15              ; A = LEFT
+    srl     t6, t8, 13
+    andi    t6, t6, 1               ; B = RIGHT
+@@pos:
+    sll     t8, t6, 1
+    addu    t6, t6, t8              ; 3B
+    xor     t5, t5, t6              ; position: 00->0 10->1 11->2 01->3
+    bnez    t7, @@jp3
+    li      t9, PAD_LEFT|PAD_RIGHT
+    andi    t8, v0, PAD_LEFT|PAD_RIGHT
+    bne     t8, t9, @@pairchk       ; plain pad so far
+    li      t7, 1
+    sb      t7, ST_JP3(t2)          ; first L+R: latch the LEFT/RIGHT wiring
+    sb      t5, ST_QPREV(t2)
+    b       @@jstrip
+    sb      zero, ST_QDIR(t2)
+@@pairs:
+    sltu    t5, zero, t8            ; A = LEFT or RIGHT
+    andi    t6, v0, PAD_UP|PAD_DOWN
+    b       @@pos
+    sltu    t6, zero, t6            ; B = UP or DOWN
+@@pairchk:
+    j       pad_pairchk             ; own chunk
+    nop
+@@jp3:
+    lbu     t6, ST_QPREV(t2)
+    sb      t5, ST_QPREV(t2)
+    subu    t6, t5, t6
+    andi    t6, t6, 3               ; 1 = +1, 3 = -1, 2 = both phases changed
+    beqz    t6, @@jstrip
+    li      t7, 2
+    beq     t6, t7, @@jskip
+    li      t7, 1
+    beq     t6, t7, @@jstep
+    li      t9, 1
+    li      t9, -1
+@@jstep:
+    sb      t9, ST_QDIR(t2)
+@@jadd:
+    lbu     t7, cfg_jcnt
+    lw      t6, ST_DX(t2)
+    mult    t9, t7
+    mflo    t7
+    addu    t6, t6, t7
+    b       @@jstrip
+    sw      t6, ST_DX(t2)
+@@jskip:
+    ; a whole step went by between two reads: keep the last direction
+    lb      t9, ST_QDIR(t2)
+    nop
+    bnez    t9, @@jadd
+    sll     t9, t9, 1
+@@jstrip:
+    li      t7, 1                   ; drives the paddle like a mouse, no clicks
+    sb      t7, ST_TYPE(t2)
+    sb      zero, ST_MBTN(t2)
+    lbu     t7, ST_JP3(t2)
+    li      t8, 0xFFFF & ~(PAD_LEFT|PAD_RIGHT)
+    addiu   t7, t7, -2
+    bnez    t7, @@js1
+    nop
+    li      t8, 0x0FFF              ; pairs wiring: no direction reaches the game
+@@js1:
+    and     v0, v0, t8
+@@dret:
+    jr      ra
+    nop
+
+;@chunk padjp3b
+; d-pad pairs detection for a plain pad (see padjp3). t5-t9, v0 in/out.
+pad_pairchk:
+    andi    t5, v0, PAD_LEFT|PAD_RIGHT
+    sltu    t5, zero, t5
+    andi    t6, v0, PAD_UP|PAD_DOWN
+    sltu    t6, zero, t6
+    sll     t6, t6, 1
+    or      t5, t5, t6              ; 1 = only LEFT/RIGHT, 2 = only UP/DOWN
+    lbu     t6, ST_QPREV(t2)
+    sb      t5, ST_QPREV(t2)
+    xor     t6, t6, t5
+    li      t7, 3
+    bne     t6, t7, @@dret          ; no swap
+    addiu   t6, t5, -1
+    sltiu   t6, t6, 2
+    beqz    t6, @@dret              ; centre <-> diagonal: a thumb does that
+    nop
+    lw      t7, v_frame
+    lw      t8, ST_JSWT(t2)
+    lbu     t9, ST_JSWN(t2)
+    sw      t7, ST_JSWT(t2)
+    subu    t8, t7, t8
+    sltiu   t8, t8, JSWWIN
+    and     t9, t9, t8              ; an earlier swap within the window
+    bnez    t9, @@latchp
+    li      t7, 1
+    b       @@dret
+    sb      t7, ST_JSWN(t2)
+@@latchp:
+    li      t7, 2
+    sb      t7, ST_JP3(t2)          ; second swap: latch the pairs wiring
+    sb      zero, ST_JSWN(t2)
+    sll     t6, t5, 1
+    addiu   t6, t6, -1              ; position: only A -> 1, only B -> 3
+    sb      t6, ST_QPREV(t2)
+    sb      zero, ST_QDIR(t2)
+    li      t7, 1                   ; drives the paddle like a mouse, no clicks
+    sb      t7, ST_TYPE(t2)
+    sb      zero, ST_MBTN(t2)
+    jr      ra
+    andi    v0, v0, 0x0FFF          ; pairs wiring: no direction reaches the game
+@@dret:
+    jr      ra
+    nop
 
 ;@chunk padneg
 pad_negcon:

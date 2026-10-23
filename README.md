@@ -5,7 +5,7 @@ clown be driven like the Neo Geo Paddle Edition:
 
 - **PlayStation Mouse** and **NeGcon** drive a virtual paddle
 - **Namco Volume** (SLPH-00015): knob = paddle, A = catch, B = throw, A then B = pull down, hold both 2 s = pause
-- **JP3 spinner** on d-pad LEFT/RIGHT, auto-enabled when LEFT+RIGHT arrive together
+- **JP3 spinner** on the d-pad: LEFT/RIGHT = phase A/B for adapters (auto-enabled when LEFT+RIGHT arrive together), or across the d-pad pairs (LEFT/RIGHT = A, UP/DOWN = B) for an encoder inside a real pad (auto-enabled by a quick spin)
 - Ordinary pads work exactly as before, in either port
 - Four builds: PAL, PAL English-start, NTSC 60 Hz, NTSC 60 Hz English-start
 
@@ -18,7 +18,7 @@ You need the Redump BIN: 455,700,000 bytes, CRC32 `FE561E70`.
 - **Browser:** open `releases/MD3_PSX_PADDLE.html`, pick your CHD or BIN, choose a build and output format (CHD or BIN+CUE). Runs offline.
 - **xdelta / PPF:** `releases/Magical Drop III Paddle Edition patches.zip` has both for every build.
 
-Expected output CRC32s: PAL `6A644BE1`, PAL English `804A7D47`, NTSC `4C9B268E`, NTSC English `A6B51028`.
+Expected output CRC32s: PAL `ACB56D5B`, PAL English `469B5BFD`, NTSC `E56CEFBC`, NTSC English `0F42D91A`.
 
 ## Building from source
 

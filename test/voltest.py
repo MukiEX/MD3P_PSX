@@ -1,6 +1,7 @@
 import sys; sys.path.insert(0,__import__('os').path.dirname(__import__('os').path.abspath(__file__)))
 from env import *
 from retro import *
+SZ=0x60   # ST_SIZE
 import re
 cue=sys.argv[1]; out=sys.argv[2]
 e=Emu(cue,ports=('negcon','standard'))
@@ -18,7 +19,7 @@ sweep(200,128); e.run(10); e.shot(D+'lang2.png')   # back to English
 a(600)                       # A = X: confirm
 sym={l.split()[1]:int(l.split()[0],16) for l in open(ROOT+'/out/work_EN/final.sym') if re.match(r'^[0-9A-F]{8} \w',l)}
 def st(p,off,n=4):
-    ad=sym['state']+0x50*p+off
+    ad=sym['state']+SZ*p+off
     return e.r8(ad) if n==1 else e.r32(ad)
 print('EN running:', e.r32(sym['v_frame'])>0, 'type',st(0,0,1),'vol',st(0,0x47,1),'neg',st(0,0x49,1))
 e.shot(D+'boot1.png')

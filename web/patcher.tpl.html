@@ -201,7 +201,7 @@ details.dev > *:last-child { margin-bottom: 18px }
           <tr><td><b>Mouse</b> (either port)</td><td>Move left and right to drive the paddle. Left button catches, right button throws. MOUSE SPEED in Options sets ×0.25 to ×2.</td><td>Left = ×, right = △, both = START. Walk the character cards and name letters by moving the mouse.</td></tr>
           <tr><td><b>NeGcon</b> (either port)</td><td>The twist is the paddle position; letting go springs the clown back to the middle column. Buttons act as their pad equivalents for catch and throw.</td><td>I = ×, II = □, A = ○, B = △, L/R = L1/R1. Twist to walk the cards.</td></tr>
           <tr><td><b>Namco Volume</b> (either port)</td><td>The knob is the paddle position, wall to wall. A catches, B throws. Hold A and press B to pull down a row. Hold both for 2 seconds to pause.</td><td>Works straight away. Turn to move up and down, hold B and turn to change a value. A = ×, a tap of B = back, A+B = START. Card select is a dial over all the cards. A NeGcon is told apart the first time it uses a control the Volume doesn't have, such as I.</td></tr>
-          <tr><td><b>JP3 spinner</b> on a pad's d-pad (either port)</td><td>LEFT is phase A, RIGHT is phase B. Turns on the first time both read pressed, which a d-pad can't do. Then it drives the paddle like the mouse: 4 edges per column at ×1. The pad's other buttons work as normal.</td><td>Turn to step left/right, walk the cards and pick letters. On the language screen, 4 edges = one flag.</td></tr>
+          <tr><td><b>JP3 spinner</b> on a pad's d-pad (either port)</td><td>Quadrature on LEFT (phase A) / RIGHT (phase B) for adapters, or across the d-pad pairs (LEFT/RIGHT = A, UP/DOWN = B) for an encoder inside a real pad. LEFT/RIGHT turns on the first time both read pressed; the pairs wiring turns on with a quick spin. Then it drives the paddle like the mouse: 4 edges per column at ×1. The pad's other buttons work as normal.</td><td>Turn to step left/right, walk the cards and pick letters. On the language screen, 4 edges = one flag.</td></tr>
           <tr><td><b>Pad / DualShock</b></td><td colspan="2">Unchanged until LEFT and RIGHT are pressed together.</td></tr>
         </tbody>
       </table>
@@ -231,7 +231,7 @@ details.dev > *:last-child { margin-bottom: 18px }
         <div class="box"><b>PS Mouse</b>movement and two buttons</div>
         <div class="box"><b>NeGcon</b>twist and analog buttons</div>
         <div class="box"><b>Namco Volume</b>knob and A/B</div>
-        <div class="box"><b>JP3 spinner</b>on LEFT/RIGHT of a pad</div>
+        <div class="box"><b>JP3 spinner</b>on a pad's d-pad</div>
       </div>
       <div class="arr" aria-hidden="true">→</div>
       <div class="col">
@@ -260,7 +260,8 @@ details.dev > *:last-child { margin-bottom: 18px }
       <ul>
         <li><b>Mouse</b> has its own ID.</li>
         <li><b>NeGcon and Volume</b> send the same ID and the same report. A Volume physically can't press I, II, L, the d-pad or several other inputs, so a port is treated as a Volume until one of those shows up on several reads in a row. Then it's a NeGcon until it's unplugged.</li>
-        <li><b>JP3 spinner</b>: a spinner wired to LEFT and RIGHT will eventually report both at once, which a real d-pad can't do. The first time that happens, the port switches to spinner mode, the same rule the Neo Geo version uses.</li>
+        <li><b>JP3 spinner, LEFT/RIGHT wiring</b> (adapters): a spinner on LEFT and RIGHT will eventually report both at once, which a real d-pad can't do. The first time that happens, the port switches to spinner mode, the same rule the Neo Geo version uses.</li>
+        <li><b>JP3 spinner, d-pad pairs wiring</b> (an encoder built into a real pad, which can't report LEFT and RIGHT together): phase A is LEFT or RIGHT, phase B is UP or DOWN. A quick spin makes the pad jump straight from only LEFT/RIGHT to only UP/DOWN between two reads, skipping a state; twice within a second switches the port to spinner mode. A thumb rolling the d-pad always passes a diagonal or the centre, so normal play never triggers it.</li>
         <li><b>Anything else</b> stays a normal pad, unchanged.</li>
       </ul>
       <p class="callout">Real hardware added one lesson. Controller reads sometimes fail or come back garbled, which made a Volume flicker between "NeGcon" and "Volume". Now a failed read repeats the last good one, garbage is ignored, and a port only counts as unplugged after 30 failed reads in a row.</p>
@@ -319,26 +320,26 @@ details.dev > *:last-child { margin-bottom: 18px }
         <tbody>
           <tr><td>Source</td><td>Redump <i>Magical Drop III (Europe) (En,Fr,De,Es,It,Nl)</i>, SLES-02964, one MODE2/2352 track, 455,700,000 bytes, CRC32 <code>FE561E70</code></td></tr>
           <tr><td>Files patched</td><td><code>SLES_029.64</code> (language selector, loads at 0x80010000) and <code>MD3EN/FR/GE/IT/SP/NL.EXE</code> (1,030,144 bytes each), rewritten in place; only changed sectors get new EDC/ECC</td></tr>
-          <tr><td>Builds</td><td>PAL <code>6A644BE1</code>, PAL English <code>804A7D47</code>, NTSC <code>4C9B268E</code>, NTSC English <code>A6B51028</code> (whole-BIN CRC32; a clean build must reproduce them)</td></tr>
-          <tr><td>Patcher keys</td><td><code>pal</code>, <code>pale</code>, <code>ntsc</code>, <code>ntsce</code>; <code>web/core.js</code> lists them in <code>crcPatched</code> and every earlier release in <code>crcOld</code> (add the old CRCs there when the patch changes)</td></tr>
+          <tr><td>Builds</td><td>PAL <code>ACB56D5B</code>, PAL English <code>469B5BFD</code>, NTSC <code>E56CEFBC</code>, NTSC English <code>0F42D91A</code> (whole-BIN CRC32; a clean build must reproduce them)</td></tr>
+          <tr><td>Patcher keys</td><td><code>pal</code>, <code>pale</code>, <code>ntsc</code>, <code>ntsce</code>; <code>web/core.js</code> lists them in <code>crcPatched</code> and every earlier release in <code>crcOld</code>. After a build that changes the output, <code>tools/setcrcs.py</code> moves the old CRCs to <code>crcOld</code> and writes the new CRC32/SHA-1s into <code>core.js</code>, this page, the README and the change list; then rerun <code>tools/mkpatcher.py</code></td></tr>
         </tbody>
       </table></div>
 
       <h3>Build</h3>
-      <pre>ARMIPS=/path/armips XDELTA3=/path/xdelta3 scripts/build_all.sh original.bin
+      <pre>ARMIPS=/path/armips XDELTA3=/path/xdelta3 tools/build_all.sh original.bin
 # 1 extract EXEs        tools/extract_exes.py  -> build/orig
 # 2 game EXEs           tools/build.py build/orig build/pal  [--ntsc]
 # 3 hazard check        tools/hazards.py src/*.asm   (must print nothing)
 # 4 selector            armips src/sles_paddle.asm -equ NTSC n -equ SKIPLANG n
 # 5 disc + patches      tools/patchdisc.py, xdelta3, tools/make_ppf.py
-# 6 this page           web/make_patchdata.py, web/build_html.py -> releases/</pre>
+# 6 this page           tools/mkpatchdata.py, tools/mkpatcher.py -> releases/MD3_PSX_PADDLE.html</pre>
       <p><code>SKIPLANG</code> and <code>NTSC</code> must always be passed with <code>-equ</code>: armips refuses <code>.ifndef</code> defaults and <code>equ</code> inside <code>.if</code>, so derived constants are written as expressions (<code>VHOLDN equ 100 + NTSC*20</code>).</p>
 
       <h3>How build.py places the code</h3>
       <ul>
         <li>Hook sites are found in each language EXE by masked signatures taken from MD3EN (immediates and jump targets masked); the original instructions are verified before writing. The EN addresses are the <code>G_*</code> table at the top of <code>tools/build.py</code> and become <code>syms_XX.asm</code> includes.</li>
         <li>Free space: functions no path from the entry point or any pointer-like word reaches, at least 0x40 bytes and starting at an <code>addiu sp,sp,-n</code> prologue, plus the EXE tail 0x8010A8E0–0x8010B000 (the heap-start <code>lui</code> at 0x80063684 now points at 0x8010B000 so InitHeap stops writing there).</li>
-        <li>The asm is split into chunks marked <code>;@chunk name</code>: cfg, state, padinit, padread, padone, padneg, padnegb, padvol, padvplay, tick, tick2, tick3, vol, volcard, clown, glide, cell, cursor, opt, name (20 chunks, about 6 KB). Each is measured, then packed best-fit largest-first with a backtracking search; <code>build_log.json</code> records every placement.</li>
+        <li>The asm is split into chunks marked <code>;@chunk name</code>: cfg, state, padinit, padread, padone, padjp3, padjp3b, padneg, padnegb, padvol, padvplay, tick, tick2, tick3, vol, volcard, clown, glide, cell, cursor, opt, name (22 chunks, about 6.3 KB). Each is measured, then packed best-fit largest-first with a backtracking search; <code>build_log.json</code> records every placement.</li>
         <li>Chunks land anywhere, so cross-chunk branches go through a local <code>j</code> trampoline, and a chunk entered with <code>jal</code> returns a status in <code>v1</code> (0 done, 1 continue as mouse at <code>@@mbtn</code>, 2 failed read) instead of jumping into the caller's <code>@@</code> labels (a static <code>@label</code> also ends the <code>@@</code> scope).</li>
         <li>If a new chunk won't fit, split chunks below the size of the ninth-largest hole; total space (8.5–9.8 KB per language) has never been the limit, fragmentation has.</li>
       </ul>
@@ -365,20 +366,21 @@ details.dev > *:last-child { margin-bottom: 18px }
       <h3>Selector (SLES_029.64)</h3>
       <p>Hook at <code>0x800136B4</code> wraps its PadRead (<code>0x800131AC</code>); raw buffer <code>0x8001F4C0</code>; code lives in an unreachable 0x50C-byte function at <code>0x800122A4</code> (the asm asserts it fits). <code>SKIPLANG</code> replaces <code>jal 0x800133C0</code> at <code>0x80011660</code> with <code>ori v0,zero,0</code> (English). NTSC changes 0x80011474/540/55C/56C/574. The selector reads pads every other frame, so its NeGcon switch needs 2 reads, not 3.</p>
 
-      <h3>Per-port state (<code>ST_SIZE</code> 0x58, two copies)</h3>
+      <h3>Per-port state (<code>ST_SIZE</code> 0x60, two copies)</h3>
       <pre>00 TYPE  0 none 1 mouse-like 2 NeGcon   04 UNITS paddle pos (128/col)  08/0C DX/DY counts
 10/14 MACC/MACCY menu accumulators      18 TWIST raw twist/knob        20 TCOL column w/ hysteresis
 24/28/2C G/C/NSTAMP frame of last hook  30 STEP  34 NACC  38 RACC      3C MAG  40 STEPBIT
-44 JP3 latched   45 QPREV   46 QDIR     47 VOL   48 VZONE              49 NEG  4A BAD (30 = gone)
+44 JP3 1 L/R 2 pairs  45 QPREV  46 QDIR  47 VOL   48 VZONE              49 NEG  4A BAD (30 = gone)
 4B NEGN  4C LAST (half, repeated on failed reads)  4E NEGS evidence mask
-50 VBH  51 VBACC  52 VCH (1 pause 2 pull 3 wait)   53 VHOLD  54 PSTR player struct</pre>
+50 VBH  51 VBACC  52 VCH (1 pause 2 pull 3 wait)   53 VHOLD  54 PSTR player struct
+58 JSWN pairs swap seen   5C JSWT its frame (two within JSWWIN = 50/60 frames latch)</pre>
 
       <h3>Controller rules</h3>
       <ul>
         <li>Raw buffer: byte 0 status (0 = good), byte 1 ID (0x41 digital, 0x73 analog, 0x12 mouse, 0x23 NeGcon/Volume), then active-low buttons and analog bytes. The ID byte is cleared after each read; still 0 next time = stale, repeat <code>ST_LAST</code>.</li>
         <li>Failed read: repeat the last word, keep all detection state; 30 in a row = unplugged (resets JP3 and Volume/NeGcon). An 0x23 read with I, II and L all ≥ 0xF0 counts as failed.</li>
         <li>0x23 is a Volume until NeGcon-only input (I/II/L past <code>cfg_nthr</code> 0x60, or any button other than START/CIRCLE) shows with an overlapping mask on 3 consecutive reads. Volume A = START bit, B = CIRCLE bit; knob in byte 4.</li>
-        <li>JP3: first read with LEFT+RIGHT latches; position = A xor 3B; delta 2 counts as two edges in the last direction; <code>cfg_jcnt</code> (8) mouse counts per edge.</li>
+        <li>JP3 (chunks <code>padjp3</code>, <code>padjp3b</code>): LEFT/RIGHT wiring (A = LEFT, B = RIGHT) latches on the first read with both; pairs wiring (A = LEFT|RIGHT, B = UP|DOWN) latches on two only-L/R ↔ only-U/D swaps between consecutive reads within <code>JSWWIN</code> frames (the selector: <code>SWIN</code> reads, 25/30). Position = A xor 3B; delta 2 counts as two edges in the last direction; <code>cfg_jcnt</code> (8) mouse counts per edge. Latched L/R strips LEFT/RIGHT, pairs strips the whole d-pad.</li>
         <li>Volume in play: A then B = pull down, both held <code>VHOLDN</code> (100 PAL / 120 NTSC) = pause; in menus knob = up/down, B + knob = left/right, B tap = △, A+B = START.</li>
       </ul>
 
@@ -386,7 +388,7 @@ details.dev > *:last-child { margin-bottom: 18px }
       <p>A 44-byte block starting <code>"PDCF"</code> in the <code>cfg</code> chunk holds every constant (offsets in the asm comments): menu step 20 counts, name step 8, hysteresis 8, settle 8, power-on speed, magnet, pulse, glide, NeGcon dead zone/range/repeat/threshold, JP3 counts, speed table 1/2/4/8, pulse table, Volume range <code>vlo</code>/<code>vhi</code> 0x00/0xFF and step 2. Its address moves per build: <code>build/pal/build_log.json</code> lists, per language, every resolved <code>G_*</code> symbol and each chunk's address and size (<code>cfg</code> included).</p>
 
       <h3>Tests</h3>
-      <p><code>test/retro.py</code> drives PCSX-ReARMed through libretro (<code>PCSX_CORE</code>; the interpreter build with <code>pcsx_rearmed_debug_hooks.diff</code> adds breakpoints, watchpoints and coverage). Scripts: <code>langtest</code> (all six languages), <code>jp3test</code>, <code>voltest</code>, <code>volmenu</code>, <code>volchord</code>, <code>glitchtest</code>, <code>mkstates</code>, <code>seq</code>. Assert from RAM via the build's symbols, rebuild savestates after any code move, and remember that switching a port's device in the emulator triggers the game's controller-removed pause. The NeGcon device in that core is 0x305; the Volume is tested as a NeGcon that never sends NeGcon-only input.</p>
+      <p><code>test/retro.py</code> drives PCSX-ReARMed through libretro (<code>PCSX_CORE</code>; the interpreter build with <code>third_party/pcsx_rearmed_debug_hooks.diff</code> adds breakpoints, watchpoints and coverage). Scripts: <code>langtest</code> (all six languages), <code>jp3test</code>, <code>pairtest</code> (JP3 pairs wiring), <code>voltest</code>, <code>volmenu</code>, <code>volchord</code>, <code>glitchtest</code>, <code>mkstates</code>, <code>seq</code>. Assert from RAM via the build's symbols, rebuild savestates after any code move, and remember that switching a port's device in the emulator triggers the game's controller-removed pause. The NeGcon device in that core is 0x305; the Volume is tested as a NeGcon that never sends NeGcon-only input.</p>
 
       <h3>Pitfalls already paid for</h3>
       <ul>
@@ -404,7 +406,7 @@ details.dev > *:last-child { margin-bottom: 18px }
 
   <footer>
     <span>Expected source: Magical Drop III (Europe) (En,Fr,De,Es,It,Nl), data CRC32 <span class="mono">FE561E70</span>.</span>
-    <span>Patched BIN CRC32: PAL <span class="mono">6A644BE1</span> (English start <span class="mono">804A7D47</span>), NTSC 60 Hz <span class="mono">4C9B268E</span> (English start <span class="mono">A6B51028</span>).</span>
+    <span>Patched BIN CRC32: PAL <span class="mono">ACB56D5B</span> (English start <span class="mono">469B5BFD</span>), NTSC 60 Hz <span class="mono">E56CEFBC</span> (English start <span class="mono">0F42D91A</span>).</span>
   </footer>
 </div>
 

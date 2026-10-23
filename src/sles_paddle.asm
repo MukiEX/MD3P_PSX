@@ -15,6 +15,7 @@ S_PadRead   equ 0x800131ac          ; returns this frame's buttons for port a0
 S_PadCall   equ 0x800136b4          ; jal S_PadRead (delay: move a0,zero)
 S_Raw       equ 0x8001f4c0          ; port 1 raw controller buffer
 S_Free      equ 0x800122a4          ; unreachable library code (0x50c bytes)
+SWIN        equ 25 + NTSC*5         ; reads in a second (the selector reads every other frame)
 
 .org S_PadCall
     jal     sles_pad
@@ -219,7 +220,7 @@ sles_pad:
     b       @@done
     sw      t4, 8(t3)
 
-    ; ---------------- JP3 spinner on LEFT / RIGHT
+    ; ---------------- JP3 spinner on LEFT / RIGHT or across the d-pad pairs
 @@stale:
     la      t3, s_vol
     b       @@done
@@ -250,31 +251,91 @@ sles_pad:
     sw      zero, 0(t3)
     sw      zero, 12(t3)
     la      t3, s_jp3
-    andi    t8, v0, 0xA000          ; LEFT | RIGHT
-    srl     t5, t8, 15              ; A
+    lw      t4, 24(t3)
+    nop
+    addiu   t4, t4, 1
+    sw      t4, 24(t3)              ; reads of a plain pad, for the pairs latch
+    ; the selector's PadRead returns newly pressed buttons, so the phases
+    ; come from the raw buffer's held bits
+    lbu     t1, 2(t0)
+    lbu     t2, 3(t0)
+    sll     t1, t1, 8
+    or      t1, t1, t2
+    xori    t1, t1, 0xFFFF          ; held, active high
+    lw      t4, 0(t3)
+    andi    t8, t1, 0xA000          ; LEFT | RIGHT
+    li      t9, 2
+    beq     t4, t9, @@sp            ; d-pad pairs wiring
+    srl     t5, t8, 15              ; A = LEFT
     srl     t6, t8, 13
-    andi    t6, t6, 1               ; B
+    andi    t6, t6, 1               ; B = RIGHT
+@@spos:
     sll     t7, t6, 1
     addu    t6, t6, t7
     xor     t5, t5, t6              ; position 0..3
-    lw      t4, 0(t3)
     li      t9, 0xA000
     bnez    t4, @@j1
     nop
-    bne     t8, t9, @@done          ; plain pad
+    bne     t8, t9, @@spchk         ; plain pad so far
     li      t4, 1
-    sw      t4, 0(t3)               ; first L+R: latch
+    sw      t4, 0(t3)               ; first L+R: latch the LEFT/RIGHT wiring
     sw      t5, 4(t3)
     sw      zero, 8(t3)
     sw      zero, 12(t3)
     b       @@done
     andi    v0, v0, 0x5FFF
+@@sp:
+    sltu    t5, zero, t8            ; A = LEFT or RIGHT
+    andi    t6, t1, 0x5000
+    b       @@spos
+    sltu    t6, zero, t6            ; B = UP or DOWN
+@@spchk:
+    ; straight from only LEFT/RIGHT to only UP/DOWN (or back) between two
+    ; reads, twice within a second: an encoder inside a real pad
+    andi    t5, t1, 0xA000
+    sltu    t5, zero, t5
+    andi    t6, t1, 0x5000
+    sltu    t6, zero, t6
+    sll     t6, t6, 1
+    or      t5, t5, t6              ; 1 = only LEFT/RIGHT, 2 = only UP/DOWN
+    lw      t6, 16(t3)
+    sw      t5, 16(t3)
+    xor     t6, t6, t5
+    li      t7, 3
+    bne     t6, t7, @@done
+    addiu   t6, t5, -1
+    sltiu   t6, t6, 2
+    beqz    t6, @@done              ; centre <-> diagonal
+    nop
+    lw      t7, 24(t3)
+    lw      t8, 20(t3)
+    nop
+    sw      t7, 20(t3)
+    beqz    t8, @@done              ; first swap
+    subu    t8, t7, t8
+    sltiu   t8, t8, SWIN
+    beqz    t8, @@done
+    li      t4, 2
+    sw      t4, 0(t3)               ; second swap: latch the pairs wiring
+    sll     t6, t5, 1
+    addiu   t6, t6, -1              ; only A -> 1, only B -> 3
+    sw      t6, 4(t3)
+    sw      zero, 8(t3)
+    sw      zero, 12(t3)
+    b       @@done
+    andi    v0, v0, 0x0FFF
 @@j1:
     lw      t6, 4(t3)
     sw      t5, 4(t3)
     subu    t6, t5, t6
     andi    t6, t6, 3
-    andi    v0, v0, 0x5FFF          ; the raw phases never reach the menu
+    li      t7, 0x5FFF              ; the raw phases never reach the menu
+    slti    t9, t4, 2
+    bnez    t9, @@jm
+    nop
+    li      t7, 0x0FFF              ; pairs wiring: no direction does
+@@jm:
+    and     v0, v0, t7
     beqz    t6, @@done
     li      t7, 2
     beq     t6, t7, @@jskip
@@ -323,7 +384,8 @@ s_defl:     .word 0
 s_vol:      .word 0, 0, 0, 0, 0, 0, 0, 0 ; NeGcon seen, last knob value, accumulator, reference valid,
                                     ; failed reads in a row, NeGcon-only reads in a row, last word,
                                     ; NeGcon-only inputs on the last read
-s_jp3:      .word 0, 0, 0, 0        ; latch, last position, last direction, edge count
+s_jp3:      .word 0, 0, 0, 0, 0, 0, 0 ; latch (1 LEFT/RIGHT, 2 d-pad pairs), last position, last direction,
+                                    ; edge count, last pairs code, read of the last swap, plain-pad reads
 s_end:
 .if s_end > S_Free + 0x50c
     .error "selector patch too big"

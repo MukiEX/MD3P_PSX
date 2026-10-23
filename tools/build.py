@@ -374,7 +374,7 @@ def build(lang, src_exe, out_exe, ref, opts, log):
             return False
         if not dfs(0):
             raise RuntimeError('%s: the payload chunks do not fit the free space\n  holes %s\n  chunks %s' % (
-                lang, sorted([h[1] - h[0] for h in hs], reverse=True), sorted(need.values(), reverse=True)))
+                lang, sorted([h[1] - h[0] for h in hs], reverse=True), ', '.join('%s %d' % (n, need[n]) for n in sorted(need, key=lambda n: -need[n]))))
     final = head + '\n'
     for n, c in chunks:
         final += '.org 0x%08x\n.align 4\n%s\n' % (place[n], c)

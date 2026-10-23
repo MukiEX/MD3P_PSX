@@ -86,19 +86,32 @@ dropped are left out.
       the knob picks letters, 4 knob steps per letter. Solo and
       Competition walk their card list with the knob.
 - JP3 "sensor" spinner on a digital pad's d-pad, as in the Neo Geo
-  version: the spinner drives the pad's LEFT and RIGHT lines as a
-  quadrature encoder, the same as the Taito F3 JP3 input:
-      LEFT  = phase A
-      RIGHT = phase B
-      A leading B (00 -> 10 -> 11 -> 01) = +1 = clockwise = right
-    - Auto-detection: a port becomes a spinner the first time LEFT and
-      RIGHT read pressed together. A d-pad can't do that. Until then
-      nothing changes: pad play is identical to the original. The port
-      drops back to a normal pad when its controller is unplugged or
-      swapped for a mouse or NeGcon. P1 and P2 are detected and counted
-      separately. All the pad's other buttons work as normal.
-    - Once a port is a spinner, LEFT/RIGHT never reach the game as
-      buttons. Every edge counts as 8 mouse counts (tuning byte "jcnt"),
+  version: a quadrature encoder, the same as the Taito F3 JP3 input,
+  wired one of two ways:
+    - LEFT/RIGHT wiring (adapters, or a spinner on the pad's lines):
+          LEFT  = phase A
+          RIGHT = phase B
+      Turns on the first time LEFT and RIGHT read pressed together. A
+      d-pad can't do that.
+    - D-pad pairs wiring (an encoder inside a real pad, which can't
+      report LEFT and RIGHT together):
+          LEFT or RIGHT = phase A
+          UP or DOWN    = phase B
+      Either contact of each pair works. Turns on when the pad goes
+      straight from only LEFT/RIGHT to only UP/DOWN (or back) between two
+      reads, twice within a second: give it a quick spin. That is the
+      encoder skipping a state between frames; a thumb rolling the d-pad
+      always passes a diagonal or the centre, so normal play never
+      triggers it.
+    - A leading B (00 -> 10 -> 11 -> 01) = +1 = clockwise = right.
+    - Until a port turns on, nothing changes: pad play is identical to
+      the original. The port drops back to a normal pad when its
+      controller is unplugged or swapped for a mouse or NeGcon. P1 and P2
+      are detected and counted separately. All the pad's other buttons
+      work as normal.
+    - Once a port is a spinner, its phase lines never reach the game as
+      buttons: LEFT/RIGHT for the first wiring, the whole d-pad for the
+      second. Every edge counts as 8 mouse counts (tuning byte "jcnt"),
       so the spinner drives the same paddle, menus, card select and name
       entry as the mouse. At MOUSE SPEED x1 that is 32 units per edge,
       4 edges (one full A/B cycle) per column.
@@ -113,8 +126,10 @@ dropped are left out.
       edges per frame (100 / 120 per second). Anything faster can't be
       decoded from frame-rate samples, so a spinner that turns faster
       needs an adapter that paces its edges, or a lower count per turn.
-    - Code: the digital-pad path of PadRead (pad_one), state bytes +0x44
-      to +0x46 of each port's state block.
+    - Code: pad_digital (chunk padjp3) and pad_pairchk (padjp3b), called
+      from PadRead's digital-pad path; state bytes +0x44 to +0x46 (+0x44:
+      1 = LEFT/RIGHT wiring, 2 = pairs) and +0x58/+0x5C (pairs latch: a
+      swap seen, and its frame).
 
 
 2. IN-GAME: THE CLOWN IS DRIVEN BY A VIRTUAL PADDLE
@@ -223,10 +238,17 @@ Hook: 0x8003575C, the clown movement routine (s2 = this tick's buttons).
 - Namco Volume: 24 knob steps = one flag, A confirms. Detection is the
   same as in the game (Volume until NeGcon-only input), and the game EXE
   detects it again on its own.
-- JP3 spinner on the d-pad: turns on the same way (LEFT and RIGHT read
-  together). Then 4 edges = one flag, and X confirms as usual. The
+- JP3 spinner on the d-pad: turns on the same way, in either wiring
+  (LEFT and RIGHT read together, or two LEFT/RIGHT <-> UP/DOWN swaps
+  within a second; the selector reads every other frame, so that is 25
+  reads PAL, 30 NTSC). Then 4 edges = one flag, and X confirms as usual. The
   selector and the game are separate EXEs, so the game detects the
   spinner again the first time it turns.
+  The selector's own pad routine returns newly pressed buttons, not held
+  ones, so the spinner is decoded from the raw buffer's held bits. (Earlier
+  releases decoded the pressed word, which can never show LEFT and RIGHT
+  together, so the spinner never latched on this screen and its raw
+  LEFT/RIGHT presses moved the flags instead.)
 - The failed-read and garbled-read handling is the same as in the game.
 - Hook: 0x800136B4, the selector's pad read. The code lives in an
   unreachable library function at 0x800122A4.
@@ -360,10 +382,10 @@ Hook: 0x8003575C, the clown movement routine (s2 = this tick's buttons).
       193750 sectors, 455,700,000 bytes
       CRC32 FE561E70, SHA-1 d368fa5c7779a052d4856f192111b163784cb06e
 - Results:
-      PAL            CRC32 6A644BE1, SHA-1 56429ab51b40b45414de371a5f5f05c51f89b869
-      PAL, English   CRC32 804A7D47, SHA-1 58d51545fe66e561b021069b8f8b669b391ee333
-      NTSC           CRC32 4C9B268E, SHA-1 6689ba01f105d4e76a93fecd4fe4a9a0d42f3818
-      NTSC, English  CRC32 A6B51028, SHA-1 f408188b28107d9ac2f287903d2f50b79d22aaa9
+      PAL            CRC32 ACB56D5B, SHA-1 3ce967f1b2d8aa93e11daf40464d4e236249d7df
+      PAL, English   CRC32 469B5BFD, SHA-1 c370c572734a371591fe75bfcb1203a944249d79
+      NTSC           CRC32 E56CEFBC, SHA-1 d543b23c2be03a9e756301a0632fc214cc1bac8f
+      NTSC, English  CRC32 0F42D91A, SHA-1 486dbad58039cc84f897de98753c3a6289c30483
 - Keep the same .cue (rename the FILE line to the new BIN). To get a CHD
   back:
       chdman createcd -i "Magical Drop III Paddle Edition (PAL).cue"
@@ -382,6 +404,10 @@ Hook: 0x8003575C, the clown movement routine (s2 = this tick's buttons).
     - a scripted JP3 spinner on a digital pad in port 1: the language
       select, card select walking, and in-game paddle movement both ways,
       including frames where both phases changed at once;
+    - the same across the d-pad pairs (pairtest.py): a rolled d-pad and
+      two swaps over a second apart don't latch, a fast spin does, on the
+      language screen and in play, and raw directions stop reaching the
+      game;
     - a scripted Namco Volume (as PCSX-ReARMed's NeGcon with START and
       A): language select, boot with no setup press, the card select
       dial over all 23 cards both ways, the knob across the whole field

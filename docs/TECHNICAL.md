@@ -32,7 +32,7 @@ Every address in this doc is for MD3EN.EXE unless it says otherwise.
 
 ## Finding room for the code
 
-The game has no spare RAM, so about 6 KB of code and data live inside each EXE, split into 20 chunks placed in library functions nothing can call plus the tail of the EXE image.
+The game has no spare RAM, so about 6 KB of code and data live inside each EXE, split into 22 chunks placed in library functions nothing can call plus the tail of the EXE image.
 
 - **Unreachable code**: build.py walks the call graph from the entry point and from every pointer-looking word and lui/addiu pair in the image. Runs never reached, starting at a function prologue (`addiu sp, sp, -n`) and at least 0x40 bytes long, are free. Recorded coverage from real play confirmed none of them ever ran.
 - **EXE tail**: 0x8010A8E0 to 0x8010B000 sits after the BSS but inside the file image.
@@ -62,7 +62,8 @@ Each port's type is decided per read from the raw buffer, so any mix works in ei
 | PS Mouse | ID 0x12; byte 3 bits 3/2 = left/right (active low); bytes 4/5 = signed dX/dY, consumed after reading | ID | Left = catch, right = throw / left = X, right = TRIANGLE; both = START |
 | NeGcon | ID 0x23; byte 4 twist (0x80 centre); bytes 5/6/7 analog I/II/L | ID 0x23 plus any NeGcon-only input on 3 reads in a row (2 in the selector) | As wired; I/II/L past 0x60 count as X/SQUARE/L1 |
 | Namco Volume (SLPH-00015) | Same ID 0x23; byte 4 knob 0x00-0xFF; A on the START bit, B on the CIRCLE bit; I/II/L always 0 | Default for ID 0x23 until NeGcon-only input shows up | A = catch, B = throw, A then B = pull down, both 2 s = pause / knob = up/down, B + knob = left/right, A = X, B tap = TRIANGLE, A+B = START |
-| JP3 spinner on a digital pad | LEFT = phase A, RIGHT = phase B | First read with LEFT and RIGHT both pressed (a d-pad can't) | Other buttons unchanged; LEFT/RIGHT never reach the game |
+| JP3 spinner on a digital pad, LEFT/RIGHT wiring | LEFT = phase A, RIGHT = phase B | First read with LEFT and RIGHT both pressed (a d-pad can't) | Other buttons unchanged; LEFT/RIGHT never reach the game |
+| JP3 spinner on a digital pad, d-pad pairs wiring (encoder inside a real pad) | LEFT or RIGHT = phase A, UP or DOWN = phase B | Two straight only-LEFT/RIGHT ↔ only-UP/DOWN swaps between consecutive reads within a second (an encoder skipping a state; a thumb passes a diagonal or the centre) | Other buttons unchanged; the d-pad never reaches the game |
 
 - **Volume vs NeGcon**: they share the ID and the report format. A Volume can never send I, II, L, the d-pad, B, R or SELECT, so the port is a Volume until one of those shows on consecutive reads. The switch is permanent until unplug. A read with I, II and L all at 0xF0+ is treated as a failed read, not as a NeGcon.
 - **JP3 decode**: position = A xor 3B maps 00/10/11/01 to 0/1/2/3; delta mod 4 gives +1, -1, or 2 (both phases changed). The PS1 reads once per frame, so a 2 is counted as two edges in the last direction rather than dropped, keeping up to 2 edges per frame.
@@ -128,7 +129,7 @@ Everything builds from source with Python 3 and armips, and a clean build reprod
 | `tools/hazards.py` | Load-delay and MFLO hazard check over the asm sources |
 | `test/retro.py` | ctypes libretro frontend for PCSX-ReARMed: scripted pad / mouse / NeGcon input, savestates, RAM reads |
 | `third_party/pcsx_rearmed_debug_hooks.diff` | Breakpoint, watchpoint and coverage hooks in the interpreter (used for free-space proof and debugging) |
-| `test/*.py` | seq, mkstates, langtest (six languages), jp3test, voltest, volmenu, volchord, glitchtest (flaky link) |
+| `test/*.py` | seq, mkstates, langtest (six languages), jp3test, pairtest (JP3 pairs wiring), voltest, volmenu, volchord, glitchtest (flaky link) |
 
 Testing habits that paid off: assert game state from RAM through the build's symbol file instead of trusting screenshots, rebuild savestates after every relocation (they contain the old code), and use watchpoints to find who writes a byte.
 

@@ -1,6 +1,7 @@
 import sys; sys.path.insert(0,__import__('os').path.dirname(__import__('os').path.abspath(__file__)))
 from env import *
 from retro import *
+SZ=0x60   # ST_SIZE
 import re
 cue=sys.argv[1]; symf=sys.argv[2]; tag=sys.argv[3] if len(sys.argv)>3 else 'p'
 sym={l.split()[1]:int(l.split()[0],16) for l in open(symf) if re.match(r'^[0-9A-F]{8} \w',l)}
@@ -15,13 +16,13 @@ def spin(port,edges,hold=2):
         e.pad[port]-= {LEFT,RIGHT}; e.pad[port]|=POS[q[port]]
         e.run(hold)
 def st(p,off,n=4):
-    a=sym['state']+0x50*p+off
+    a=sym['state']+SZ*p+off
     return e.r8(a) if n==1 else e.r32(a)
 e.run(400); e.shot(D+tag+'_lang0.png')
 spin(0,12); e.run(10); e.shot(D+tag+'_lang1.png')
 spin(0,-8); e.run(10); e.shot(D+tag+'_lang2.png')
-spin(0,-8); e.run(10); e.shot(D+tag+'_lang3.png')
-spin(0,8); e.run(10); e.shot(D+tag+'_lang4.png')   # back to English
+spin(0,-4); e.run(10); e.shot(D+tag+'_lang3.png')   # back to English: +3 -2 -1 flags
+e.run(10); e.shot(D+tag+'_lang4.png')
 e.pad[0]-={LEFT,RIGHT}; e.run(5)
 e.press(0,B,4,20); e.run(600); e.press(0,B,4,20); e.run(600)
 e.press(0,START,4,20); e.run(400); e.press(0,START,4,20); e.run(400)
